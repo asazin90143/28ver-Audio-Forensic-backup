@@ -62,10 +62,18 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
                     const jsonStr = stdout.substring(startIndex + startMarker.length, endIndex);
                     resolve(JSON.parse(jsonStr));
                 } else {
-                    // Fallback
+                    // Fallback: try to find the outermost JSON object
                     const start = stdout.indexOf('{');
                     const end = stdout.lastIndexOf('}');
-                    resolve(JSON.parse(stdout.substring(start, end + 1)));
+                    if (start === -1 || end === -1 || end <= start) {
+                        return reject(new Error(`No JSON found in Python output. Stderr: ${stderr}`));
+                    }
+                    const candidate = stdout.substring(start, end + 1);
+                    const parsed = JSON.parse(candidate);
+                    if (typeof parsed !== "object" || parsed === null) {
+                        return reject(new Error(`Parsed output is not a valid object. Stderr: ${stderr}`));
+                    }
+                    resolve(parsed);
                 }
             } catch (e: any) {
                 reject(new Error(`Parse error: ${e.message}`));
