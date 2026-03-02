@@ -15,7 +15,7 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
 
     console.log(`[Forensic] Spawning: python ${quotedScriptPath} ${formattedArgs.join(" ")}`);
 
-    const python = spawn("python", [quotedScriptPath, ...formattedArgs], {
+    const python = spawn("python", ["-u", quotedScriptPath, ...formattedArgs], {
       shell: true,
       windowsHide: true
     });
@@ -36,6 +36,11 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
       stdout += msg;
 
       if (msg.includes("[JSON_START]")) {
+        // Print everything BEFORE the JSON marker to the terminal
+        const markerIndex = msg.indexOf("[JSON_START]");
+        if (markerIndex > 0) {
+          process.stdout.write(msg.substring(0, markerIndex));
+        }
         isCapturingJson = true;
       }
 
