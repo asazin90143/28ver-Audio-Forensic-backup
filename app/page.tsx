@@ -121,7 +121,11 @@ export default function AudioForensicDetector() {
 
       let result
       if (response && response.ok) {
-        result = await response.json()
+        const apiResult = await response.json()
+
+        // Extract the classification object so soundEvents is at the top level
+        // (Sonar View reads audioData.analysisResults.soundEvents directly)
+        result = apiResult.classification || apiResult
 
         // Polyfill frequency spectrum if missing (for legacy or partial API results)
         if (!result.frequencySpectrum || result.frequencySpectrum.length === 0) {
