@@ -147,11 +147,11 @@ def classify_audio(audio_path, job_id):
         model_path = get_yamnet_model_path()
         
         base_options = python.BaseOptions(model_asset_path=model_path)
-        # Ultra-sensitive: capture almost everything
+        # Balanced sensitivity: capture real events, filter noise
         options = audio.AudioClassifierOptions(
             base_options=base_options,
-            max_results=25,
-            score_threshold=0.001 
+            max_results=10,
+            score_threshold=0.05 
         )
         classifier = audio.AudioClassifier.create_from_options(options)
 
@@ -169,29 +169,39 @@ def classify_audio(audio_path, job_id):
         
         all_detections = []
         
-        # Process every result window
+        # Process every result window with DEDUPLICATION
         for i, discovery in enumerate(results):
             timestamp = i * 0.48 # YAMNet window step
+            
+            # Collect best score per forensic_type for this timestamp
+            best_per_type = {}
             
             for classification in discovery.classifications:
                 for category in classification.categories:
                     forensic_type = map_to_forensic_category(category.category_name)
                     
-                    # We always include detected events in the high-res stream
-                    # but only if they meet a slightly higher threshold to keep UI clean
                     if forensic_type != "Ambient / Noise":
-                        decibels = round(20 * np.log10(max(1e-5, category.score)) - 10, 1)
-                        
-                        # PRINT FOR USER TERMINAL (Requested Format)
-                        print(f"[YAMNet] Time: {timestamp:.2f}s | Class: {forensic_type} | Confidence: {category.score:.4f} | Vol: {decibels}dB")
+                        # Keep only the highest confidence per forensic_type per window
+                        if forensic_type not in best_per_type or category.score > best_per_type[forensic_type]["score"]:
+                            best_per_type[forensic_type] = {
+                                "score": category.score,
+                                "label": category.category_name
+                            }
+            
+            # Append only the best detection per type
+            for forensic_type, info in best_per_type.items():
+                decibels = round(20 * np.log10(max(1e-5, info["score"])) - 10, 1)
+                
+                # PRINT FOR USER TERMINAL (Requested Format)
+                print(f"[YAMNet] Time: {timestamp:.2f}s | Class: {forensic_type} | Confidence: {info['score']:.4f} | Vol: {decibels}dB")
 
-                        all_detections.append({
-                            "type": forensic_type, # UI uses .type
-                            "label": category.category_name,
-                            "confidence": float(category.score),
-                            "time": round(timestamp, 3),
-                            "decibels": decibels # Estimated Power
-                        })
+                all_detections.append({
+                    "type": forensic_type, # UI uses .type
+                    "label": info["label"],
+                    "confidence": float(info["score"]),
+                    "time": round(timestamp, 3),
+                    "decibels": decibels # Estimated Power
+                })
 
         # Summary for status badges (one per category)
         required_ui_categories = [
