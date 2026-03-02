@@ -16,7 +16,8 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
 
         const python = spawn("python", ["-u", quotedScriptPath, ...formattedArgs], {
             shell: true,
-            windowsHide: true
+            windowsHide: true,
+            env: { ...process.env, COLUMNS: "80", PYTHONIOENCODING: "utf-8" }
         });
 
         let stdout = "";
@@ -51,7 +52,12 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
         python.stderr.on("data", (data) => {
             const msg = data.toString();
             stderr += msg;
-            process.stderr.write(msg);
+            // Clean up tqdm progress bars: replace \r with \n so each update is its own line
+            const cleaned = msg.replace(/\r/g, "\n");
+            const lines = cleaned.split("\n").filter((l: string) => l.trim().length > 0);
+            for (const line of lines) {
+                process.stderr.write(line + "\n");
+            }
         });
 
         python.on("close", (code) => {
