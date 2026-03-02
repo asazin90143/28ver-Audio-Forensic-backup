@@ -4,4 +4,6 @@ mediapipe
 demucs
 gunicorn
 flask
+tensorflow
+librosa
 
