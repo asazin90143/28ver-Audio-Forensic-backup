@@ -764,8 +764,34 @@ export default function EnhancedAudioAnalysis({ audioData, ...props }: EnhancedA
     )
   }
 
-  const results = audioData.analysisResults
-  const isEnhanced = results.enhanced || results.analysisType === "enhanced_classification"
+  const rawResults = audioData.analysisResults
+  const isEnhanced = rawResults.enhanced || rawResults.analysisType === "enhanced_classification"
+
+  // Normalize results: compute missing fields from what YAMNet actually provides
+  const events = rawResults.soundEvents || rawResults.allDetections || []
+  const results = {
+    ...rawResults,
+    // Derive summary stats if missing
+    detectedSounds: rawResults.detectedSounds ?? events.length,
+    duration: rawResults.duration ?? (events.length > 0 ? Math.max(...events.map((e: any) => Number(e.time) || 0)) + 0.48 : audioData.duration || 0),
+    sampleRate: rawResults.sampleRate ?? 16000, // YAMNet uses 16kHz
+    dominantFrequency: rawResults.dominantFrequency ?? (() => {
+      if (events.length === 0) return 0
+      const best = events.reduce((a: any, b: any) => ((a.confidence || 0) > (b.confidence || 0) ? a : b), events[0])
+      // Estimate frequency from decibels (rough approximation for display)
+      return Math.abs(Number(best.decibels || 0)) * 50
+    })(),
+    maxDecibels: rawResults.maxDecibels ?? (() => {
+      if (events.length === 0) return 0
+      return Math.max(...events.map((e: any) => Math.abs(Number(e.decibels || 0))))
+    })(),
+    // Normalize soundEvents to include amplitude and frequency fields
+    soundEvents: events.map((ev: any) => ({
+      ...ev,
+      amplitude: ev.amplitude ?? ev.confidence ?? 0,
+      frequency: ev.frequency ?? Math.abs(Number(ev.decibels || 0)) * 50,
+    })),
+  }
 
   return (
     <div>
