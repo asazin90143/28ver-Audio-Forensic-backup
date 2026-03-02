@@ -1,0 +1,7 @@
+numpy
+scipy
+mediapipe
+demucs
+gunicorn
+flask
+
