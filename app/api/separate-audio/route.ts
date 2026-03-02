@@ -105,6 +105,29 @@ export async function POST(request: NextRequest) {
         const outputDir = path.join(process.cwd(), "public", "separated_audio");
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
+        // Cleanup: Remove separation folders older than 1 hour
+        try {
+            const MAX_AGE_MS = 60 * 60 * 1000; // 1 hour
+            const now = Date.now();
+            const subDirs = ["htdemucs", "generated"];
+            for (const sub of subDirs) {
+                const subPath = path.join(outputDir, sub);
+                if (fs.existsSync(subPath)) {
+                    const entries = fs.readdirSync(subPath);
+                    for (const entry of entries) {
+                        const entryPath = path.join(subPath, entry);
+                        try {
+                            const stat = fs.statSync(entryPath);
+                            if (stat.isDirectory() && (now - stat.mtimeMs) > MAX_AGE_MS) {
+                                fs.rmSync(entryPath, { recursive: true, force: true });
+                                console.log(`[Cleanup] Removed old folder: ${entry}`);
+                            }
+                        } catch (e) { /* skip individual errors */ }
+                    }
+                }
+            }
+        } catch (e) { /* cleanup is best-effort, don't fail the request */ }
+
         // 3. Run Separation
         const separation = await runPython("audio_separator.py", [
             `"${tempFilePath}"`,
