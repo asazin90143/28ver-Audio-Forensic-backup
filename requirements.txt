@@ -6,4 +6,6 @@ gunicorn
 flask
 tensorflow
 librosa
-
+fastapi
+python-multipart
+uvicorn

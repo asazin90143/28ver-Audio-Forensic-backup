@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-multipart
+# Add existing requirements
+tensorflow
+librosa
+mediapipe
+numpy

@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import crypto from "crypto";
 import { analysisQueue } from "@/lib/job-queue";
 
 export const maxDuration = 900; // Increased to 15 minutes for longer files
@@ -142,6 +143,49 @@ export async function POST(request: NextRequest) {
       fs.writeFileSync(tempFilePath, Buffer.from(audioData, 'base64'));
     }
 
+    // 1. Generate an MD5 hash of the file for caching
+    const fileBuffer = fs.readFileSync(tempFilePath);
+    const fileHash = crypto.createHash('md5').update(fileBuffer).digest('hex');
+    const cachePath = path.join(os.tmpdir(), `${fileHash}_cache.json`);
+
+    // 2. Check if we already have this exact file analyzed
+    if (fs.existsSync(cachePath)) {
+      console.log(`[Cache Hit] Returning existing YAMNet results for ${fileHash}`);
+      const cachedResult = JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+      return NextResponse.json({
+        status: "Success",
+        jobID,
+        classification: cachedResult,
+        cached: true
+      });
+    }
+
+    // 3. Fallback to external FastAPI if configured
+    if (process.env.PYTHON_BACKEND_URL) {
+      console.log(`[Decouple] Forwarding classification to ${process.env.PYTHON_BACKEND_URL}/api/classify`);
+      const externalFormData = new FormData();
+      externalFormData.append("job_id", jobID);
+      const blob = new Blob([fileBuffer], { type: "audio/wav" });
+      externalFormData.append("audio", blob, "audio.wav");
+
+      const extRes = await fetch(`${process.env.PYTHON_BACKEND_URL}/api/classify`, {
+        method: "POST",
+        body: externalFormData
+      });
+
+      if (!extRes.ok) throw new Error("External FastAPI error");
+      const extData = await extRes.json();
+
+      fs.writeFileSync(cachePath, JSON.stringify(extData.classification));
+
+      return NextResponse.json({
+        status: "Success",
+        jobID,
+        classification: extData.classification,
+        remote: true
+      });
+    }
+
     const outputDir = path.join(process.cwd(), "public", "separated_audio");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
@@ -152,6 +196,9 @@ export async function POST(request: NextRequest) {
         `"${jobID}"`
       ]);
     });
+
+    // Save to cache
+    fs.writeFileSync(cachePath, JSON.stringify(classification));
 
     return NextResponse.json({
       status: "Success",
