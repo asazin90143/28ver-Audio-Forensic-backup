@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { analysisQueue } from "@/lib/job-queue";
 
 export const maxDuration = 900; // Increased to 15 minutes for longer files
 
@@ -144,11 +145,13 @@ export async function POST(request: NextRequest) {
     const outputDir = path.join(process.cwd(), "public", "separated_audio");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    // Only run Classification (YAMNet) - FAST
-    const classification = await runPython("mediapipe_audio_classifier.py", [
-      `"${tempFilePath}"`,
-      `"${jobID}"`
-    ]);
+    // Only run Classification (YAMNet) - FAST via Queue
+    const classification = await analysisQueue.enqueue(jobID + "_classify", async () => {
+      return await runPython("mediapipe_audio_classifier.py", [
+        `"${tempFilePath}"`,
+        `"${jobID}"`
+      ]);
+    });
 
     return NextResponse.json({
       status: "Success",

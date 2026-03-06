@@ -3,6 +3,7 @@ import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import { analysisQueue } from "@/lib/job-queue";
 
 export const maxDuration = 900;
 
@@ -147,13 +148,15 @@ export async function POST(request: NextRequest) {
             }
         } catch (e) { /* cleanup is best-effort, don't fail the request */ }
 
-        // 3. Run Separation
-        const separation = await runPython("audio_separator.py", [
-            `"${tempFilePath}"`,
-            `"${outputDir}"`,
-            `"${jobID}"`,
-            `"${classificationPath}"`
-        ]);
+        // 3. Run Separation via Job Queue
+        const separation = await analysisQueue.enqueue(jobID, async () => {
+            return await runPython("audio_separator.py", [
+                `"${tempFilePath}"`,
+                `"${outputDir}"`,
+                `"${jobID}"`,
+                `"${classificationPath}"`
+            ]);
+        });
 
         return NextResponse.json({
             status: "Success",
