@@ -4,10 +4,11 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { analysisQueue } from "@/lib/job-queue";
+import { jobEvents } from "@/lib/event-emitter";
 
 export const maxDuration = 900;
 
-async function runPython(scriptName: string, args: string[]): Promise<any> {
+async function runPython(scriptName: string, args: string[], jobId?: string): Promise<any> {
     return new Promise((resolve, reject) => {
         const scriptPath = path.join(process.cwd(), "scripts", scriptName);
         const quotedScriptPath = `"${scriptPath}"`;
@@ -58,6 +59,15 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
             const lines = cleaned.split("\n").filter((l: string) => l.trim().length > 0);
             for (const line of lines) {
                 process.stderr.write(line + "\n");
+
+                // Parse tqdm percent
+                if (jobId) {
+                    const match = line.match(/(\d+)%\|/);
+                    if (match) {
+                        const percent = parseInt(match[1], 10);
+                        jobEvents.emit(`progress-${jobId}`, { percent, text: "Isolating Audio Targets..." });
+                    }
+                }
             }
         });
 
@@ -87,13 +97,19 @@ async function runPython(scriptName: string, args: string[]): Promise<any> {
                     }
                     resolve(parsed);
                 }
+
+                if (jobId) {
+                    jobEvents.emit(`done-${jobId}`);
+                }
             } catch (e: any) {
+                if (jobId) jobEvents.emit(`error-${jobId}`, `Parse error: ${e.message}`);
                 reject(new Error(`Parse error: ${e.message}`));
             }
         });
 
         python.on("error", (err) => {
             clearTimeout(timeout);
+            if (jobId) jobEvents.emit(`error-${jobId}`, err.message);
             reject(err);
         });
     });
@@ -155,7 +171,7 @@ export async function POST(request: NextRequest) {
                 `"${outputDir}"`,
                 `"${jobID}"`,
                 `"${classificationPath}"`
-            ]);
+            ], jobID);
         });
 
         return NextResponse.json({

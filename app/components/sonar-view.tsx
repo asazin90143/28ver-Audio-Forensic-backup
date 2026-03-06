@@ -154,6 +154,9 @@ export default function SonarView({
   const [rotation, setRotation] = useState({ x: 0.5, y: 0.5 })
   const [currentTime, setCurrentTime] = useState(0)
   const [isSeparating, setIsSeparating] = useState(false)
+  const [separationProgress, setSeparationProgress] = useState(0)
+  const [separationText, setSeparationText] = useState("Isolating Audio Targets...")
+
   // Interaction State
   const [hoveredEvent, setHoveredEvent] = useState<any | null>(null);
   const mousePos = useRef({ x: 0, y: 0 });
@@ -227,6 +230,8 @@ export default function SonarView({
       const audioBlob = await responseBlob.blob();
       const safeFileName = (audioData.name || "audio.wav").replace(/[^a-z0-9.]/gi, "_").toLowerCase();
 
+      const jobId = safeFileName.replace(/[^a-z0-9]/gi, '_');
+
       const formData = new FormData();
       formData.append("audio", audioBlob, safeFileName);
 
@@ -251,6 +256,21 @@ export default function SonarView({
       }
 
       // PHASE 2: DEEP FORENSIC SEPARATION (Demucs)
+      setSeparationProgress(0);
+      setSeparationText("Initializing AI Engine...");
+
+      const sse = new EventSource(`/api/progress?jobId=${jobId}`);
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.percent !== undefined) setSeparationProgress(data.percent);
+          if (data.text) setSeparationText(data.text);
+          if (data.error) console.error("SSE Error:", data.error);
+        } catch (e) {
+          // ignore parsing error
+        }
+      };
+
       const sepFormData = new FormData();
       sepFormData.append("audio", audioBlob, safeFileName);
       sepFormData.append("classification", JSON.stringify(classResult.classification));
@@ -259,6 +279,8 @@ export default function SonarView({
         method: "POST",
         body: sepFormData
       });
+
+      sse.close(); // Clean up listener when done
 
       if (!sepResponse.ok) throw new Error("Separation failed");
       const sepResult = await sepResponse.json();
@@ -274,6 +296,7 @@ export default function SonarView({
       alert(`Forensic Engine Error: ${error.message}`);
     } finally {
       setIsSeparating(false);
+      setSeparationProgress(0);
     }
   };
 
@@ -368,17 +391,17 @@ export default function SonarView({
       // Calculate distance from decibels (inverse relationship: closer = louder)
       const db = Number(ev.decibels || -60);
       const distanceInMeters = Math.abs(db); // Approximate: -10dB = 10m, -60dB = 60m
-      
+
       // Normalize distance to radar radius (0-100m range mapped to 0-maxR)
       const normalizedDistance = Math.min(distanceInMeters / 100, 1.0);
       const d = normalizedDistance * maxR * 0.9; // Distance from center
-      
+
       // Use sound characteristics to determine direction (pseudo-random but consistent)
       // Combine time, confidence, and sound type to create unique direction for each sound
       const directionSeed = (ev.time || 0) * 1000 + (ev.confidence || 0) * 100 + (ev.type || "").length;
       const angle = (directionSeed * 137.5) % 360; // Golden angle for natural distribution
       const a = (angle * Math.PI / 180) - Math.PI / 2;
-      
+
       const x = cx + Math.cos(a) * d;
       const y = cy + Math.sin(a) * d;
 
@@ -392,10 +415,10 @@ export default function SonarView({
 
       // Color based on distance (closer = brighter/warmer, farther = dimmer/cooler)
       const distanceColor = distanceInMeters < 20 ? "#ef4444" : // Close: Red
-                           distanceInMeters < 40 ? "#f97316" : // Medium: Orange  
-                           distanceInMeters < 60 ? "#eab308" : // Far: Yellow
-                           "#6b7280"; // Very Far: Gray
-      
+        distanceInMeters < 40 ? "#f97316" : // Medium: Orange  
+          distanceInMeters < 60 ? "#eab308" : // Far: Yellow
+            "#6b7280"; // Very Far: Gray
+
       const baseColor = ev.speaker === "SPEAKER_01" ? "#ef4444" : distanceColor;
       const color = isActive ? "#ffffff" : baseColor;
 
@@ -610,17 +633,17 @@ export default function SonarView({
       // Calculate distance from decibels (inverse relationship: closer = louder)
       const db = Number(ev.decibels || -60);
       const distanceInMeters = Math.abs(db); // Approximate: -10dB = 10m, -60dB = 60m
-      
+
       // Map distance to 3D space (0-100m range to -200 to +200)
       const distanceNormalized = Math.min(distanceInMeters / 100, 1.0);
       const actualDistance = distanceNormalized * 200; // Max 200 units from center
-      
+
       // Use sound characteristics to determine direction (pseudo-random but consistent)
       // Combine time, confidence, and sound type to create unique direction for each sound
       const directionSeed = (ev.time || 0) * 1000 + (ev.confidence || 0) * 100 + (ev.type || "").length;
       const angle = (directionSeed * 137.5) % 360; // Golden angle for natural distribution
       const angleRad = (angle * Math.PI / 180);
-      
+
       const xRaw = Math.cos(angleRad) * actualDistance;
       const zRaw = Math.sin(angleRad) * actualDistance;
 
@@ -659,10 +682,10 @@ export default function SonarView({
 
       // Color based on distance (closer = brighter/warmer, farther = dimmer/cooler)
       const distanceColor = distance < 20 ? "#ef4444" : // Close: Red
-                           distance < 40 ? "#f97316" : // Medium: Orange  
-                           distance < 60 ? "#eab308" : // Far: Yellow
-                           "#6b7280"; // Very Far: Gray
-      
+        distance < 40 ? "#f97316" : // Medium: Orange  
+          distance < 60 ? "#eab308" : // Far: Yellow
+            "#6b7280"; // Very Far: Gray
+
       const baseColor = ev.speaker === 'SPEAKER_01' ? '#ef4444' : distanceColor;
 
       // Calculate Opacity based on Z-Distance (Fog) - More aggressive
@@ -798,11 +821,19 @@ export default function SonarView({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button onClick={handleDeconstruct} disabled={isSeparating} className="bg-indigo-600 hover:bg-indigo-500 font-bold h-20 px-10 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)]">
+          <Button onClick={handleDeconstruct} disabled={isSeparating} className="bg-indigo-600 hover:bg-indigo-500 font-bold h-20 px-10 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] min-w-[200px]">
             {isSeparating ? (
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center w-full">
                 <Loader2 className="animate-spin mb-1" />
-                <span className="text-[10px] tracking-widest uppercase">Isolating_Signals...</span>
+                <span className="text-[10px] tracking-widest uppercase truncate max-w-[180px]">{separationText}</span>
+                {separationProgress > 0 && separationProgress < 100 && (
+                  <div className="w-full bg-indigo-900 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                    <div
+                      className="bg-indigo-300 h-full transition-all duration-300 ease-out"
+                      style={{ width: `${separationProgress}%` }}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <><Scissors className="mr-3" /> DECONSTRUCT AUDIO</>
@@ -923,19 +954,19 @@ export default function SonarView({
               <ForensicTrack url={currentStems?.screams} label="Scream / Aggression" color="#be123c" icon={Megaphone} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Scream", "Shout"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.sirens} label="Siren / Alarm" color="#f97316" icon={AlertTriangle} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Siren", "Alarm"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.impact} label="Impact / Breach" color="#7c3aed" icon={Hammer} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Glass", "Hammer", "Slam"])} isSeparating={isSeparating} />
-              
+
               {/* DISTANCE-BASED STEMS FOR VEHICLES */}
               <ForensicTrack url={currentStems?.vehicles_very_close} label="Vehicle (0-20m)" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.vehicles_close} label="Vehicle (20-40m)" color="#f87171" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.vehicles_medium} label="Vehicle (40-60m)" color="#fca5a5" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.vehicles_far} label="Vehicle (60m+)" color="#fecaca" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-              
+
               {/* DISTANCE-BASED STEMS FOR HUMAN VOICE */}
               <ForensicTrack url={currentStems?.human_voice_very_close} label="Voice (0-20m)" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.human_voice_close} label="Voice (20-40m)" color="#60a5fa" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.human_voice_medium} label="Voice (40-60m)" color="#93c5fd" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.human_voice_far} label="Voice (60m+)" color="#dbeafe" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-              
+
               {/* DISTANCE-BASED STEMS FOR FOOTSTEPS */}
               <ForensicTrack url={currentStems?.footsteps_very_close} label="Footsteps (0-20m)" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
               <ForensicTrack url={currentStems?.footsteps_close} label="Footsteps (20-40m)" color="#a78bfa" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
