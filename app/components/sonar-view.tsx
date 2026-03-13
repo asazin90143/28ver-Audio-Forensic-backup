@@ -154,6 +154,7 @@ export default function SonarView({
   const [rotation, setRotation] = useState({ x: 0.5, y: 0.5 })
   const [currentTime, setCurrentTime] = useState(0)
   const [isSeparating, setIsSeparating] = useState(false)
+  const [isIsolatingVoices, setIsIsolatingVoices] = useState(false)
   const [separationProgress, setSeparationProgress] = useState(0)
   const [separationText, setSeparationText] = useState("Isolating Audio Targets...")
 
@@ -296,6 +297,59 @@ export default function SonarView({
       alert(`Forensic Engine Error: ${error.message}`);
     } finally {
       setIsSeparating(false);
+      setSeparationProgress(0);
+    }
+  };
+
+  const handleDiarize = async () => {
+    if (!audioData?.url) return;
+    setIsIsolatingVoices(true);
+    setSeparationProgress(0);
+    setSeparationText("Analyzing Speaker Count...");
+
+    try {
+      const responseBlob = await fetch(audioData.url);
+      const audioBlob = await responseBlob.blob();
+      const safeFileName = (audioData.name || "audio.wav").replace(/[^a-z0-9.]/gi, "_").toLowerCase();
+      const jobId = safeFileName.replace(/[^a-z0-9]/gi, '_');
+
+      const sse = new EventSource(`/api/progress?jobId=${jobId}`);
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.percent !== undefined) setSeparationProgress(data.percent);
+          if (data.text) setSeparationText(data.text);
+          if (data.error) console.error("SSE Error:", data.error);
+        } catch (e) { }
+      };
+
+      const formData = new FormData();
+      formData.append("audio", audioBlob, safeFileName);
+
+      const response = await fetch("/api/diarize-audio", {
+        method: "POST",
+        body: formData
+      });
+
+      sse.close();
+
+      if (!response.ok) throw new Error("Voice Isolation failed");
+      const result = await response.json();
+
+      if (result.stems && setCurrentStems) {
+         setCurrentStems(result.stems);
+         if (setShowStems) setShowStems(true);
+      }
+
+      if (result.speakers) {
+         alert(`Voice Isolation Complete! Detected ${result.speakers} unique speaker(s).`);
+      }
+
+    } catch (error: any) {
+      console.error("Diarize Error:", error);
+      alert(`Speaker Isolation Error: ${error.message}`);
+    } finally {
+      setIsIsolatingVoices(false);
       setSeparationProgress(0);
     }
   };
@@ -821,7 +875,23 @@ export default function SonarView({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button onClick={handleDeconstruct} disabled={isSeparating} className="bg-indigo-600 hover:bg-indigo-500 font-bold h-20 px-10 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] min-w-[200px]">
+          <Button onClick={handleDiarize} disabled={isSeparating || isIsolatingVoices} className="bg-pink-600 hover:bg-pink-500 text-white font-bold h-20 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(219,39,119,0.3)] min-w-[150px]">
+             {isIsolatingVoices ? (
+               <div className="flex flex-col items-center w-full">
+                 <Loader2 className="animate-spin mb-1" />
+                 <span className="text-[10px] tracking-widest uppercase truncate max-w-[130px]">{separationText}</span>
+                 {separationProgress > 0 && separationProgress < 100 && (
+                   <div className="w-full bg-pink-900 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                     <div className="bg-pink-300 h-full transition-all duration-300 ease-out" style={{ width: `${separationProgress}%` }} />
+                   </div>
+                 )}
+               </div>
+             ) : (
+               <><UserSearch className="mr-2 w-5 h-5" /> ISOLATE VOICES</>
+             )}
+          </Button>
+
+          <Button onClick={handleDeconstruct} disabled={isSeparating || isIsolatingVoices} className="bg-indigo-600 hover:bg-indigo-500 font-bold h-20 px-10 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] min-w-[200px]">
             {isSeparating ? (
               <div className="flex flex-col items-center w-full">
                 <Loader2 className="animate-spin mb-1" />
