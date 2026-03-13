@@ -2,8 +2,16 @@ import os
 import sys
 import json
 import warnings
-import torch
+import numpy as np
+
+# Patch torchaudio backend compatibility for torchaudio >= 2.10
+# pyannote.audio calls torchaudio.list_audio_backends() which was removed
 import torchaudio
+if not hasattr(torchaudio, 'list_audio_backends'):
+    torchaudio.list_audio_backends = lambda: ['soundfile']
+
+import torch
+import soundfile as sf
 from speechbrain.inference.separation import SepformerSeparation as separator
 from pyannote.audio import Pipeline
 
@@ -97,9 +105,9 @@ def main():
                 source_wav = source_wav.unsqueeze(0) 
                 
                 out_path = os.path.join(output_dir, f"{job_id}_voice_{i+1}.wav")
-                # Save using torchaudio
-                # SepFormer operates at 8000Hz strictly, so we save at 8000Hz
-                torchaudio.save(out_path, source_wav, 8000)
+                # Save using soundfile (more compatible than torchaudio.save)
+                wav_numpy = source_wav.squeeze().cpu().numpy()
+                sf.write(out_path, wav_numpy, 8000)
                 
                 output_stems.append({
                     "name": f"Isolated Voice {i+1}",
