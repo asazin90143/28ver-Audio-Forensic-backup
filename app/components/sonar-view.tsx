@@ -10,7 +10,7 @@ import {
   Target, Play, Pause, Layers, Activity,
   FileText, ChevronRight, Scissors, Loader2,
   Download, Mic2, Wind, Database, Bird, Car, Footprints, AudioWaveform,
-  Waves, Volume2, VolumeX, Bomb, Hammer, AlertTriangle, Megaphone, Zap
+  Waves, Volume2, VolumeX, Bomb, Hammer, AlertTriangle, Megaphone, Zap, UserSearch
 } from "lucide-react"
 
 import ForensicDashboard from "./forensic-dashboard" // New Component
