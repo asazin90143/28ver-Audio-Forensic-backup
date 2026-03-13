@@ -44,7 +44,7 @@ def main():
         print_progress(10, "Loading PyAnnote Diarization Model...")
         pipeline = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1",
-            use_auth_token=hf_token
+            token=hf_token
         )
 
         # Move to GPU if available
