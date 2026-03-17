@@ -77,6 +77,18 @@ def main():
 
     os.makedirs(output_dir, exist_ok=True)
     
+    # Load .env file explicitly
+    try:
+        from dotenv import load_dotenv
+        # Look for .env in the project root (one level up from scripts directory)
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        # Windows powershell echo/out-file often creates UTF-16LE files (Start bytes: 255 254)
+        load_dotenv(dotenv_path=env_path, encoding='utf-16le')
+        # Also try standard utf-8 just in case
+        load_dotenv(dotenv_path=env_path, encoding='utf-8')
+    except ImportError:
+        pass
+
     hf_token = os.environ.get("HUGGINGFACE_TOKEN")
     if not hf_token:
         print_progress(0, "Error: Missing HUGGINGFACE_TOKEN in .env")
