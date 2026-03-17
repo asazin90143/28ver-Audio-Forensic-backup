@@ -3,15 +3,58 @@ import sys
 import json
 import warnings
 import numpy as np
+import shutil
+import tempfile
+
+# Patch os.symlink for Windows (SpeechBrain uses symlinks which require admin on Windows)
+_original_symlink = os.symlink
+def _safe_symlink(src, dst, *args, **kwargs):
+    try:
+        _original_symlink(src, dst, *args, **kwargs)
+    except OSError:
+        # Fall back to copy if symlinks aren't allowed
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+os.symlink = _safe_symlink
 
 # Patch torchaudio backend compatibility for torchaudio >= 2.10
-# pyannote.audio calls torchaudio.list_audio_backends() which was removed
+# pyannote.audio and older speechbrain call removed torchaudio APIs
 import torchaudio
 if not hasattr(torchaudio, 'list_audio_backends'):
     torchaudio.list_audio_backends = lambda: ['soundfile']
+if not hasattr(torchaudio, 'set_audio_backend'):
+    torchaudio.set_audio_backend = lambda x: None
 
 import torch
 import soundfile as sf
+
+# Patch huggingface_hub: newer versions removed 'use_auth_token' param
+# but SpeechBrain 1.0.x still passes it internally
+import huggingface_hub
+_original_snapshot_download = huggingface_hub.snapshot_download
+def _patched_snapshot_download(*args, **kwargs):
+    if 'use_auth_token' in kwargs:
+        kwargs['token'] = kwargs.pop('use_auth_token')
+    return _original_snapshot_download(*args, **kwargs)
+huggingface_hub.snapshot_download = _patched_snapshot_download
+
+_original_hf_hub_download = huggingface_hub.hf_hub_download
+def _patched_hf_hub_download(*args, **kwargs):
+    if 'use_auth_token' in kwargs:
+        kwargs['token'] = kwargs.pop('use_auth_token')
+    try:
+        return _original_hf_hub_download(*args, **kwargs)
+    except Exception as e:
+        if "custom.py" in str(kwargs.get("filename", args[1] if len(args) > 1 else "")) and ("404" in str(e) or "Entry Not Found" in str(e)):
+            # If SpeechBrain asks for custom.py but it doesn't exist on HF repo, ignore it
+            temp_custom = os.path.join(tempfile.gettempdir(), 'speechbrain_empty_custom.py')
+            with open(temp_custom, 'w') as f: f.write('')
+            return temp_custom
+        raise e
+huggingface_hub.hf_hub_download = _patched_hf_hub_download
+
 from speechbrain.inference.separation import SepformerSeparation as separator
 from pyannote.audio import Pipeline
 
@@ -51,12 +94,26 @@ def main():
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
 
+        print_progress(20, "Loading audio file...")
+        # Pre-load audio with soundfile to avoid broken torchcodec/torchaudio decoder
+        audio_np, sample_rate = sf.read(input_file, dtype='float32')
+        # Ensure mono -> shape (1, samples) for PyAnnote
+        if len(audio_np.shape) > 1:
+            audio_np = audio_np.mean(axis=1)
+        waveform = torch.tensor(audio_np).unsqueeze(0).float()
+        
         print_progress(30, "Analyzing audio for distinct speakers...")
-        diarization = pipeline(input_file)
+        diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+        
+        # PyAnnote 3.1 returns a DiarizeOutput wrapper; extract the Annotation object
+        if hasattr(diarization, 'speaker_diarization'):
+            annotation = diarization.speaker_diarization
+        else:
+            annotation = diarization
         
         # Extract unique speakers and their total speaking time
         speaker_times = {}
-        for turn, _, speaker in diarization.itertracks(yield_label=True):
+        for turn, _, speaker in annotation.itertracks(yield_label=True):
             if speaker not in speaker_times:
                 speaker_times[speaker] = 0.0
             speaker_times[speaker] += turn.end - turn.start
@@ -72,17 +129,24 @@ def main():
         # Phase 2: Speech separation using SpeechBrain SepFormer
         # Using the WHAMR! model which is excellent for 2+ speakers in noisy environments
         # Note: If num_speakers > 2 or 3, a more dynamic model might be needed, but Sepformer handles 2-3 well.
-        model_name = "speechbrain/sepformer-wham" 
+        model_name = "speechbrain/sepformer-wsj02mix"
         
         # In this implementation, we will use Sepformer to separate the full audio, 
         # and then map the diarization labels to the separated stems based on energy/activity.
         # This is a robust approach when exact source count is unknown prior to PyAnnote.
-        sep_model = separator.from_hparams(source=model_name, savedir='pretrained_models/sepformer-wham')
+        sep_model = separator.from_hparams(source=model_name, savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj02mix'))
         
         print_progress(70, "Physically separating overlapping voices...")
         
-        # Load audio for separation
-        est_sources = sep_model.separate_file(path=input_file)
+        # Resample to 8kHz for SepFormer (it operates at 8000Hz)
+        if sample_rate != 8000:
+            import torchaudio.functional as F
+            waveform_8k = F.resample(waveform, orig_freq=sample_rate, new_freq=8000)
+        else:
+            waveform_8k = waveform
+        
+        # Use separate_batch with in-memory tensor instead of separate_file (avoids torchcodec)
+        est_sources = sep_model.separate_batch(waveform_8k)
         
         # For WHAM/Sepformer, it typically outputs 2 sources. 
         # So we process the separated sources and save them.
@@ -130,6 +194,7 @@ def main():
         }
         
         print(f"[JSON_START]{json.dumps(result)}[JSON_END]")
+        sys.exit(0)
 
     except Exception as e:
         print_progress(0, f"Error: {str(e)}")
