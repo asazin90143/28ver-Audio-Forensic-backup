@@ -308,7 +308,9 @@ export default function SonarView({
     setSeparationText("Analyzing Speaker Count...");
 
     try {
-      const responseBlob = await fetch(audioData.url);
+      // Feed the crisp Demucs speech stem to PyAnnote instead of the noisy master mix
+      const audioToIsolate = currentStems?.vocals || audioData?.url;
+      const responseBlob = await fetch(audioToIsolate);
       const audioBlob = await responseBlob.blob();
       const safeFileName = (audioData.name || "audio.wav").replace(/[^a-z0-9.]/gi, "_").toLowerCase();
       const jobId = safeFileName.replace(/[^a-z0-9]/gi, '_');
@@ -875,7 +877,11 @@ export default function SonarView({
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <Button onClick={handleDiarize} disabled={isSeparating || isIsolatingVoices} className="bg-pink-600 hover:bg-pink-500 text-white font-bold h-20 px-6 rounded-xl transition-all shadow-[0_0_20px_rgba(219,39,119,0.3)] min-w-[150px]">
+          <Button 
+            onClick={handleDiarize} 
+            disabled={!currentStems?.vocals || isSeparating || isIsolatingVoices} 
+            className={`${!currentStems?.vocals ? 'bg-slate-800 text-slate-500 shadow-none' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-[0_0_20px_rgba(219,39,119,0.3)]'} font-bold h-20 px-6 rounded-xl transition-all min-w-[150px]`}
+          >
              {isIsolatingVoices ? (
                <div className="flex flex-col items-center w-full">
                  <Loader2 className="animate-spin mb-1" />
@@ -887,7 +893,7 @@ export default function SonarView({
                  )}
                </div>
              ) : (
-               <><UserSearch className="mr-2 w-5 h-5" /> ISOLATE VOICES</>
+               <><UserSearch className="mr-2 w-5 h-5" /> {!currentStems?.vocals ? "NO VOCALS DETECTED" : "ISOLATE VOICES"}</>
              )}
           </Button>
 
