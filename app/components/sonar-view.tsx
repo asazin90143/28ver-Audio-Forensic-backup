@@ -339,7 +339,10 @@ export default function SonarView({
       const result = await response.json();
 
       if (result.stems && setCurrentStems) {
-         setCurrentStems(result.stems);
+         setCurrentStems((prev: any) => ({
+             ...prev,
+             isolatedVoices: result.stems
+         }));
          if (setShowStems) setShowStems(true);
       }
 
@@ -1019,57 +1022,58 @@ export default function SonarView({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
               <ForensicTrack url={audioData?.url} label="Master Mix" color="#ffffff" icon={AudioWaveform} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Master"])} isSeparating={isSeparating} />
               
-              {Array.isArray(currentStems) ? (
-                currentStems.map((stem: any, idx: number) => {
+              <>
+                <ForensicTrack url={currentStems?.vocals} label="Vocals / Dialogue" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                
+                {/* DYNAMIC ISOLATED VOICES INSERTED RIGHT UNDER VOCALS */}
+                {currentStems?.isolatedVoices && Array.isArray(currentStems.isolatedVoices) && currentStems.isolatedVoices.map((stem: any, idx: number) => {
                   const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
                   return (
                     <ForensicTrack 
-                      key={idx}
+                      key={`isolated-${idx}`}
                       url={stem.url} 
                       label={stem.name} 
                       color={colors[idx % colors.length]} 
-                      icon={Mic2} 
+                      icon={UserSearch} 
                       masterPlaying={isPlaying} 
                       masterTime={currentTime} 
                       stats={getStats(["Voice", "Speech"])} 
                       isSeparating={isSeparating} 
                     />
                   )
-                })
-              ) : (
-                <>
-                  <ForensicTrack url={currentStems?.vocals} label="Vocals / Dialogue" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.background} label="Ambient / Noise" color="#10b981" icon={Waves} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Music", "Background"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.vehicles} label="Vehicle / Machinery" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.footsteps} label="Footsteps / Impact" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.animals} label="Animal Signal" color="#f59e0b" icon={Bird} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Animal", "Bird", "Dog"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.wind} label="Atmospheric Wind" color="#06b6d4" icon={Wind} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Wind", "Thunder"])} isSeparating={isSeparating} />
+                })}
 
-                  {/* NEW FORENSIC CATEGORIES WITH DISTANCE-BASED STEMS */}
-                  <ForensicTrack url={currentStems?.gunshots} label="Gunshot / Explosion" color="#dc2626" icon={Bomb} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Gunshot", "Explosion"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.screams} label="Scream / Aggression" color="#be123c" icon={Megaphone} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Scream", "Shout"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.sirens} label="Siren / Alarm" color="#f97316" icon={AlertTriangle} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Siren", "Alarm"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.impact} label="Impact / Breach" color="#7c3aed" icon={Hammer} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Glass", "Hammer", "Slam"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.background} label="Ambient / Noise" color="#10b981" icon={Waves} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Music", "Background"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.vehicles} label="Vehicle / Machinery" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.footsteps} label="Footsteps / Impact" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.animals} label="Animal Signal" color="#f59e0b" icon={Bird} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Animal", "Bird", "Dog"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.wind} label="Atmospheric Wind" color="#06b6d4" icon={Wind} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Wind", "Thunder"])} isSeparating={isSeparating} />
 
-                  {/* DISTANCE-BASED STEMS FOR VEHICLES */}
-                  <ForensicTrack url={currentStems?.vehicles_very_close} label="Vehicle (0-20m)" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.vehicles_close} label="Vehicle (20-40m)" color="#f87171" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.vehicles_medium} label="Vehicle (40-60m)" color="#fca5a5" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.vehicles_far} label="Vehicle (60m+)" color="#fecaca" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                {/* NEW FORENSIC CATEGORIES WITH DISTANCE-BASED STEMS */}
+                <ForensicTrack url={currentStems?.gunshots} label="Gunshot / Explosion" color="#dc2626" icon={Bomb} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Gunshot", "Explosion"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.screams} label="Scream / Aggression" color="#be123c" icon={Megaphone} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Scream", "Shout"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.sirens} label="Siren / Alarm" color="#f97316" icon={AlertTriangle} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Siren", "Alarm"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.impact} label="Impact / Breach" color="#7c3aed" icon={Hammer} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Glass", "Hammer", "Slam"])} isSeparating={isSeparating} />
 
-                  {/* DISTANCE-BASED STEMS FOR HUMAN VOICE */}
-                  <ForensicTrack url={currentStems?.human_voice_very_close} label="Voice (0-20m)" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.human_voice_close} label="Voice (20-40m)" color="#60a5fa" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.human_voice_medium} label="Voice (40-60m)" color="#93c5fd" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.human_voice_far} label="Voice (60m+)" color="#dbeafe" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                {/* DISTANCE-BASED STEMS FOR VEHICLES */}
+                <ForensicTrack url={currentStems?.vehicles_very_close} label="Vehicle (0-20m)" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.vehicles_close} label="Vehicle (20-40m)" color="#f87171" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.vehicles_medium} label="Vehicle (40-60m)" color="#fca5a5" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.vehicles_far} label="Vehicle (60m+)" color="#fecaca" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
 
-                  {/* DISTANCE-BASED STEMS FOR FOOTSTEPS */}
-                  <ForensicTrack url={currentStems?.footsteps_very_close} label="Footsteps (0-20m)" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.footsteps_close} label="Footsteps (20-40m)" color="#a78bfa" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.footsteps_medium} label="Footsteps (40-60m)" color="#c4b5fd" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                  <ForensicTrack url={currentStems?.footsteps_far} label="Footsteps (60m+)" color="#ede9fe" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                {/* DISTANCE-BASED STEMS FOR HUMAN VOICE */}
+                <ForensicTrack url={currentStems?.human_voice_very_close} label="Voice (0-20m)" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.human_voice_close} label="Voice (20-40m)" color="#60a5fa" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.human_voice_medium} label="Voice (40-60m)" color="#93c5fd" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.human_voice_far} label="Voice (60m+)" color="#dbeafe" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+
+                {/* DISTANCE-BASED STEMS FOR FOOTSTEPS */}
+                <ForensicTrack url={currentStems?.footsteps_very_close} label="Footsteps (0-20m)" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.footsteps_close} label="Footsteps (20-40m)" color="#a78bfa" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.footsteps_medium} label="Footsteps (40-60m)" color="#c4b5fd" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                <ForensicTrack url={currentStems?.footsteps_far} label="Footsteps (60m+)" color="#ede9fe" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+
                 </>
-              )}
             </div>
           )}
         </TabsContent>
