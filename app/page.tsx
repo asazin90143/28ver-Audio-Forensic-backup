@@ -31,6 +31,7 @@ export default function AudioForensicDetector() {
   const [recordingStatus, setRecordingStatus] = useState<string>("")
   const [currentStems, setCurrentStems] = useState<any>(null)
   const [showStems, setShowStems] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
@@ -213,6 +214,35 @@ export default function AudioForensicDetector() {
     }
   }
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("audio/")) {
+      const newAudio = {
+        blob: file,
+        url: URL.createObjectURL(file),
+        name: file.name,
+        duration: 0,
+      }
+      setAudioData(newAudio)
+      runAudioAnalysis(newAudio)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500/30">
       {/* HEADER SECTION */}
@@ -282,14 +312,19 @@ export default function AudioForensicDetector() {
 
         {activeTab === "Upload" && (
           <div className="max-w-3xl mx-auto py-20">
-            <label className="group relative block cursor-pointer">
+            <label 
+              className="group relative block cursor-pointer"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <input type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
-              <div className="border-2 border-dashed border-slate-800 bg-slate-900/30 rounded-3xl p-20 text-center transition-all group-hover:border-purple-500/50 group-hover:bg-purple-500/5">
-                <div className="w-20 h-20 bg-slate-800 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-slate-700 group-hover:scale-110 transition-transform">
-                  <Upload className="w-10 h-10 text-purple-500" />
+              <div className={`border-2 border-dashed rounded-3xl p-20 text-center transition-all ${isDragging ? "border-purple-400 bg-purple-500/10 scale-[1.02]" : "border-slate-800 bg-slate-900/30 group-hover:border-purple-500/50 group-hover:bg-purple-500/5"}`}>
+                <div className={`w-20 h-20 bg-slate-800 rounded-2xl mx-auto mb-6 flex items-center justify-center border border-slate-700 transition-transform ${isDragging ? "scale-110 shadow-[0_0_20px_rgba(168,85,247,0.4)]" : "group-hover:scale-110"}`}>
+                  <Upload className={`w-10 h-10 ${isDragging ? "text-purple-400" : "text-purple-500"}`} />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Ingest External Data</h2>
-                <p className="text-slate-500">Supports WAV, MP3, FLAC, M4A up to 50MB</p>
+                <h2 className="text-2xl font-bold mb-2">{isDragging ? "Drop Audio File Here" : "Ingest External Data"}</h2>
+                <p className={`text-slate-500 transition-colors ${isDragging ? "text-purple-300" : ""}`}>Supports WAV, MP3, FLAC, M4A up to 50MB</p>
               </div>
             </label>
           </div>
