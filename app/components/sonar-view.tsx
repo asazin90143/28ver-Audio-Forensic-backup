@@ -15,6 +15,93 @@ import {
 
 import ForensicDashboard from "./forensic-dashboard" // New Component
 
+// --- GLOBAL COLOR MAP: One color per sound class for Sonar + Stems sync ---
+const SOUND_CLASS_CONFIG: Record<string, { color: string; angle: number }> = {
+  // Human voices all share one unified blue — angle spread across NE quadrant
+  "Voice":       { color: "#3b82f6", angle: 45 },
+  "Speech":      { color: "#3b82f6", angle: 50 },
+  "Human Voice": { color: "#3b82f6", angle: 55 },
+  "Singing":     { color: "#3b82f6", angle: 40 },
+  // Vehicles — Southern hemisphere
+  "Vehicle":     { color: "#ef4444", angle: 200 },
+  "Car":         { color: "#ef4444", angle: 210 },
+  "Engine":      { color: "#ef4444", angle: 190 },
+  // Animals — Eastern hemisphere
+  "Animal":      { color: "#f59e0b", angle: 110 },
+  "Bird":        { color: "#f59e0b", angle: 120 },
+  "Dog":         { color: "#f59e0b", angle: 130 },
+  // Environment
+  "Wind":        { color: "#06b6d4", angle: 290 },
+  "Thunder":     { color: "#06b6d4", angle: 300 },
+  "Music":       { color: "#10b981", angle: 330 },
+  "Background":  { color: "#10b981", angle: 340 },
+  // Forensic threats — Western hemisphere
+  "Gunshot":     { color: "#dc2626", angle: 250 },
+  "Explosion":   { color: "#dc2626", angle: 260 },
+  "Scream":      { color: "#be123c", angle: 230 },
+  "Shout":       { color: "#be123c", angle: 235 },
+  "Siren":       { color: "#f97316", angle: 270 },
+  "Alarm":       { color: "#f97316", angle: 275 },
+  "Glass":       { color: "#7c3aed", angle: 160 },
+  "Footstep":    { color: "#8b5cf6", angle: 150 },
+};
+
+const getClassConfig = (type: string) => {
+  if (!type) return { color: "#6b7280", angle: 0 };
+  // Try exact match first, then partial keyword match
+  if (SOUND_CLASS_CONFIG[type]) return SOUND_CLASS_CONFIG[type];
+  const key = Object.keys(SOUND_CLASS_CONFIG).find(k => type.toLowerCase().includes(k.toLowerCase()));
+  return key ? SOUND_CLASS_CONFIG[key] : { color: "#6b7280", angle: (type.length * 37) % 360 };
+};
+
+// --- EVENT FUSION: Merge consecutive same-type events into clean blocks ---
+interface FusedEvent {
+  type: string;
+  startTime: number;
+  endTime: number;
+  count: number;
+  avgDecibels: number;
+  maxConfidence: number;
+  speaker?: string;
+}
+
+function fuseEvents(events: any[]): FusedEvent[] {
+  if (!events || events.length === 0) return [];
+  
+  // Sort by time
+  const sorted = [...events].sort((a, b) => (a.time || 0) - (b.time || 0));
+  const fused: FusedEvent[] = [];
+  let current: FusedEvent | null = null;
+
+  sorted.forEach((ev) => {
+    const evType = (ev.type || "SIGNAL").toUpperCase();
+    const evTime = Number(ev.time || 0);
+    const evDb = Number(ev.decibels || -60);
+    const evConf = Number(ev.confidence || 0);
+
+    // If same type and within 1.5 seconds of the previous event, merge
+    if (current && current.type === evType && (evTime - current.endTime) < 1.5) {
+      current.endTime = evTime;
+      current.count += 1;
+      current.avgDecibels = (current.avgDecibels * (current.count - 1) + evDb) / current.count;
+      current.maxConfidence = Math.max(current.maxConfidence, evConf);
+    } else {
+      if (current) fused.push(current);
+      current = {
+        type: evType,
+        startTime: evTime,
+        endTime: evTime,
+        count: 1,
+        avgDecibels: evDb,
+        maxConfidence: evConf,
+        speaker: ev.speaker,
+      };
+    }
+  });
+  if (current) fused.push(current);
+  return fused;
+}
+
 // --- FORENSIC TRACK COMPONENT ---
 function ForensicTrack({ url, label, color, icon: Icon, masterPlaying, masterTime, stats, isSeparating }: any) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -169,6 +256,7 @@ export default function SonarView({
   const scanAngle = useRef(0)
   // Use the classification from the analysis result if available
   const activeEvents = isRecording ? liveEvents : (audioData?.analysisResults?.soundEvents || [])
+  const fusedEvents = fuseEvents(activeEvents);
 
   const handleMouseMove2D = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -455,11 +543,11 @@ export default function SonarView({
       const normalizedDistance = Math.min(distanceInMeters / 100, 1.0);
       const d = normalizedDistance * maxR * 0.9; // Distance from center
 
-      // Use sound characteristics to determine direction (pseudo-random but consistent)
-      // Combine time, confidence, and sound type to create unique direction for each sound
-      const directionSeed = (ev.time || 0) * 1000 + (ev.confidence || 0) * 100 + (ev.type || "").length;
-      const angle = (directionSeed * 137.5) % 360; // Golden angle for natural distribution
-      const a = (angle * Math.PI / 180) - Math.PI / 2;
+      // Spatial Anchor: Fixed angle per sound class for consistent radar positioning
+      const classConf = getClassConfig(ev.type);
+      // Add a small per-event offset so same-class events don't stack perfectly
+      const offsetDeg = ((ev.time || 0) * 7) % 15 - 7.5;
+      const a = ((classConf.angle + offsetDeg) * Math.PI / 180) - Math.PI / 2;
 
       const x = cx + Math.cos(a) * d;
       const y = cy + Math.sin(a) * d;
@@ -472,13 +560,8 @@ export default function SonarView({
       const isHovered = distToMouse < 15;
       if (isHovered) foundHover = ev;
 
-      // Color based on distance (closer = brighter/warmer, farther = dimmer/cooler)
-      const distanceColor = distanceInMeters < 20 ? "#ef4444" : // Close: Red
-        distanceInMeters < 40 ? "#f97316" : // Medium: Orange  
-          distanceInMeters < 60 ? "#eab308" : // Far: Yellow
-            "#6b7280"; // Very Far: Gray
-
-      const baseColor = ev.speaker === "SPEAKER_01" ? "#ef4444" : distanceColor;
+      // Unified color from global class config
+      const baseColor = getClassConfig(ev.type).color;
       const color = isActive ? "#ffffff" : baseColor;
 
       // Subtle glow ring (smaller)
@@ -697,11 +780,10 @@ export default function SonarView({
       const distanceNormalized = Math.min(distanceInMeters / 100, 1.0);
       const actualDistance = distanceNormalized * 200; // Max 200 units from center
 
-      // Use sound characteristics to determine direction (pseudo-random but consistent)
-      // Combine time, confidence, and sound type to create unique direction for each sound
-      const directionSeed = (ev.time || 0) * 1000 + (ev.confidence || 0) * 100 + (ev.type || "").length;
-      const angle = (directionSeed * 137.5) % 360; // Golden angle for natural distribution
-      const angleRad = (angle * Math.PI / 180);
+      // Spatial Anchor: Fixed angle per sound class for consistent 3D positioning
+      const classConf3D = getClassConfig(ev.type);
+      const offsetDeg3D = ((ev.time || 0) * 7) % 15 - 7.5;
+      const angleRad = ((classConf3D.angle + offsetDeg3D) * Math.PI / 180);
 
       const xRaw = Math.cos(angleRad) * actualDistance;
       const zRaw = Math.sin(angleRad) * actualDistance;
@@ -739,13 +821,8 @@ export default function SonarView({
       }
       const isSelected = hoveredVoxel && hoveredVoxel === ev;
 
-      // Color based on distance (closer = brighter/warmer, farther = dimmer/cooler)
-      const distanceColor = distance < 20 ? "#ef4444" : // Close: Red
-        distance < 40 ? "#f97316" : // Medium: Orange  
-          distance < 60 ? "#eab308" : // Far: Yellow
-            "#6b7280"; // Very Far: Gray
-
-      const baseColor = ev.speaker === 'SPEAKER_01' ? '#ef4444' : distanceColor;
+      // Unified color from global class config
+      const baseColor = getClassConfig(ev.type).color;
 
       // Calculate Opacity based on Z-Distance (Fog) - More aggressive
       const fogFactor = Math.max(0.1, 1 - (zIndex + 200) / 450);
@@ -948,31 +1025,34 @@ export default function SonarView({
             {showStems && <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.2)]">LIVE_STEM_SYNC</Badge>}
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {activeEvents.map((ev: any, i: number) => {
-              const isActive = Math.abs(currentTime - (ev.time || 0)) < 0.3;
-              const db = Number(ev.decibels || -60).toFixed(1);
-              const confidence = ((ev.confidence || 0) * 100).toFixed(0);
-              // Estimate distance: -10db = 10m, -90db = 90m (Linear approx for viz)
-              const distance = Math.abs(Number(db)).toFixed(1);
+            {fusedEvents.map((block: FusedEvent, i: number) => {
+              const isActive = currentTime >= block.startTime && currentTime <= block.endTime + 0.5;
+              const db = block.avgDecibels.toFixed(1);
+              const confidence = (block.maxConfidence * 100).toFixed(0);
+              const classColor = getClassConfig(block.type).color;
+              const timeLabel = block.startTime === block.endTime
+                ? `${block.startTime.toFixed(2)}s`
+                : `${block.startTime.toFixed(2)}s — ${block.endTime.toFixed(2)}s`;
 
               return (
                 <div
                   key={i}
-                  onClick={() => jumpToTime(ev.time)}
+                  onClick={() => jumpToTime(block.startTime)}
                   className={`relative flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border-l-2 bg-slate-900/40 group hover:bg-slate-800 ${isActive
-                    ? `border-l-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] scale-[1.02] z-10 ${ev.speaker === 'SPEAKER_01' ? 'border-red-500 bg-red-950/20' : 'border-blue-500 bg-blue-950/20'}`
+                    ? `border-l-4 shadow-[0_0_20px_rgba(0,0,0,0.5)] scale-[1.02] z-10 bg-slate-800/60`
                     : 'border-transparent opacity-70 hover:opacity-100'
                     }`}
+                  style={{ borderLeftColor: isActive ? classColor : 'transparent' }}
                 >
                   <div className="flex flex-col flex-1 mx-4">
                     <div className="flex items-center gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-current animate-pulse" : "bg-slate-700"}`} />
+                      <div className={`w-1.5 h-1.5 rounded-full ${isActive ? "animate-pulse" : "bg-slate-700"}`} style={{ backgroundColor: isActive ? classColor : undefined }} />
                       <span className={`text-[10px] tabular-nums font-mono ${isActive ? "text-white" : "text-slate-500"}`}>
-                        {Number(ev?.time || 0).toFixed(3)}s
+                        {timeLabel}
                       </span>
                     </div>
-                    <span className={`text-[13px] font-black uppercase tracking-wider mt-0.5 ${ev.speaker === 'SPEAKER_01' ? 'text-red-400' : 'text-blue-400'}`}>
-                      {(ev.type || "SIGNAL").toUpperCase()}
+                    <span className="text-[13px] font-black uppercase tracking-wider mt-0.5" style={{ color: classColor }}>
+                      {block.type}
                     </span>
                   </div>
 
@@ -1025,23 +1105,20 @@ export default function SonarView({
               <>
                 <ForensicTrack url={currentStems?.vocals} label="Vocals / Dialogue" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
                 
-                {/* DYNAMIC ISOLATED VOICES INSERTED RIGHT UNDER VOCALS */}
-                {currentStems?.isolatedVoices && Array.isArray(currentStems.isolatedVoices) && currentStems.isolatedVoices.map((stem: any, idx: number) => {
-                  const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6"];
-                  return (
+                {/* DYNAMIC ISOLATED VOICES — Unified Blue to match Vocals / Dialogue */}
+                {currentStems?.isolatedVoices && Array.isArray(currentStems.isolatedVoices) && currentStems.isolatedVoices.map((stem: any, idx: number) => (
                     <ForensicTrack 
                       key={`isolated-${idx}`}
                       url={stem.url} 
                       label={stem.name} 
-                      color={colors[idx % colors.length]} 
+                      color="#3b82f6"
                       icon={UserSearch} 
                       masterPlaying={isPlaying} 
                       masterTime={currentTime} 
                       stats={getStats(["Voice", "Speech"])} 
                       isSeparating={isSeparating} 
                     />
-                  )
-                })}
+                ))}
 
                 <ForensicTrack url={currentStems?.background} label="Ambient / Noise" color="#10b981" icon={Waves} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Music", "Background"])} isSeparating={isSeparating} />
                 <ForensicTrack url={currentStems?.vehicles} label="Vehicle / Machinery" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
