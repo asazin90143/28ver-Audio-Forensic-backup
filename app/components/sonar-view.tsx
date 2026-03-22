@@ -1100,57 +1100,95 @@ export default function SonarView({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
-              <ForensicTrack url={audioData?.url} label="Master Mix" color="#ffffff" icon={AudioWaveform} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Master"])} isSeparating={isSeparating} />
-              
-              <>
-                <ForensicTrack url={currentStems?.vocals} label="Vocals / Dialogue" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+              {(() => {
+                const tracks = [];
                 
-                {/* DYNAMIC ISOLATED VOICES — Unified Blue to match Vocals / Dialogue */}
-                {currentStems?.isolatedVoices && Array.isArray(currentStems.isolatedVoices) && currentStems.isolatedVoices.map((stem: any, idx: number) => (
-                    <ForensicTrack 
-                      key={`isolated-${idx}`}
-                      url={stem.url} 
-                      label={stem.name} 
-                      color="#3b82f6"
-                      icon={UserSearch} 
-                      masterPlaying={isPlaying} 
-                      masterTime={currentTime} 
-                      stats={getStats(["Voice", "Speech"])} 
-                      isSeparating={isSeparating} 
-                    />
-                ))}
+                // 1. Master Mix
+                tracks.push({
+                  id: "master", url: audioData?.url, label: "Master Mix", color: "#ffffff", icon: AudioWaveform, stats: getStats(["Master"]), isSeparating
+                });
 
-                <ForensicTrack url={currentStems?.background} label="Ambient / Noise" color="#10b981" icon={Waves} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Music", "Background"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.vehicles} label="Vehicle / Machinery" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.footsteps} label="Footsteps / Impact" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.animals} label="Animal Signal" color="#f59e0b" icon={Bird} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Animal", "Bird", "Dog"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.wind} label="Atmospheric Wind" color="#06b6d4" icon={Wind} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Wind", "Thunder"])} isSeparating={isSeparating} />
+                // 2. Vocals
+                tracks.push({
+                  id: "vocals", url: currentStems?.vocals, label: "Vocals / Dialogue", color: "#3b82f6", icon: Mic2, stats: getStats(["Voice", "Speech"]), isSeparating
+                });
 
-                {/* NEW FORENSIC CATEGORIES WITH DISTANCE-BASED STEMS */}
-                <ForensicTrack url={currentStems?.gunshots} label="Gunshot / Explosion" color="#dc2626" icon={Bomb} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Gunshot", "Explosion"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.screams} label="Scream / Aggression" color="#be123c" icon={Megaphone} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Scream", "Shout"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.sirens} label="Siren / Alarm" color="#f97316" icon={AlertTriangle} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Siren", "Alarm"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.impact} label="Impact / Breach" color="#7c3aed" icon={Hammer} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Glass", "Hammer", "Slam"])} isSeparating={isSeparating} />
+                // 3. Isolated Voices
+                if (currentStems?.isolatedVoices && Array.isArray(currentStems.isolatedVoices)) {
+                  currentStems.isolatedVoices.forEach((stem: any, idx: number) => {
+                    tracks.push({
+                      id: `isolated-${idx}`, url: stem.url, label: stem.name, color: "#3b82f6", icon: UserSearch, stats: getStats(["Voice", "Speech"]), isSeparating
+                    });
+                  });
+                }
 
-                {/* DISTANCE-BASED STEMS FOR VEHICLES */}
-                <ForensicTrack url={currentStems?.vehicles_very_close} label="Vehicle (0-20m)" color="#ef4444" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.vehicles_close} label="Vehicle (20-40m)" color="#f87171" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.vehicles_medium} label="Vehicle (40-60m)" color="#fca5a5" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.vehicles_far} label="Vehicle (60m+)" color="#fecaca" icon={Car} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Vehicle", "Car", "Engine"])} isSeparating={isSeparating} />
+                // 4. Core Environments
+                tracks.push(
+                  { id: "background", url: currentStems?.background, label: "Ambient / Noise", color: "#10b981", icon: Waves, stats: getStats(["Music", "Background"]), isSeparating },
+                  { id: "vehicles", url: currentStems?.vehicles, label: "Vehicle / Machinery", color: "#ef4444", icon: Car, stats: getStats(["Vehicle", "Car", "Engine"]), isSeparating },
+                  { id: "footsteps", url: currentStems?.footsteps, label: "Footsteps / Impact", color: "#8b5cf6", icon: Footprints, stats: getStats(["Footstep"]), isSeparating },
+                  { id: "animals", url: currentStems?.animals, label: "Animal Signal", color: "#f59e0b", icon: Bird, stats: getStats(["Animal", "Bird", "Dog"]), isSeparating },
+                  { id: "wind", url: currentStems?.wind, label: "Atmospheric Wind", color: "#06b6d4", icon: Wind, stats: getStats(["Wind", "Thunder"]), isSeparating }
+                );
 
-                {/* DISTANCE-BASED STEMS FOR HUMAN VOICE */}
-                <ForensicTrack url={currentStems?.human_voice_very_close} label="Voice (0-20m)" color="#3b82f6" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.human_voice_close} label="Voice (20-40m)" color="#60a5fa" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.human_voice_medium} label="Voice (40-60m)" color="#93c5fd" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.human_voice_far} label="Voice (60m+)" color="#dbeafe" icon={Mic2} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Voice", "Speech"])} isSeparating={isSeparating} />
+                // 5. Forensic Categories
+                tracks.push(
+                  { id: "gunshots", url: currentStems?.gunshots, label: "Gunshot / Explosion", color: "#dc2626", icon: Bomb, stats: getStats(["Gunshot", "Explosion"]), isSeparating },
+                  { id: "screams", url: currentStems?.screams, label: "Scream / Aggression", color: "#be123c", icon: Megaphone, stats: getStats(["Scream", "Shout"]), isSeparating },
+                  { id: "sirens", url: currentStems?.sirens, label: "Siren / Alarm", color: "#f97316", icon: AlertTriangle, stats: getStats(["Siren", "Alarm"]), isSeparating },
+                  { id: "impact", url: currentStems?.impact, label: "Impact / Breach", color: "#7c3aed", icon: Hammer, stats: getStats(["Glass", "Hammer", "Slam"]), isSeparating }
+                );
 
-                {/* DISTANCE-BASED STEMS FOR FOOTSTEPS */}
-                <ForensicTrack url={currentStems?.footsteps_very_close} label="Footsteps (0-20m)" color="#8b5cf6" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.footsteps_close} label="Footsteps (20-40m)" color="#a78bfa" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.footsteps_medium} label="Footsteps (40-60m)" color="#c4b5fd" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
-                <ForensicTrack url={currentStems?.footsteps_far} label="Footsteps (60m+)" color="#ede9fe" icon={Footprints} masterPlaying={isPlaying} masterTime={currentTime} stats={getStats(["Footstep"])} isSeparating={isSeparating} />
+                // 6. Distance-Based Vehicles
+                tracks.push(
+                  { id: "veh_vc", url: currentStems?.vehicles_very_close, label: "Vehicle (0-20m)", color: "#ef4444", icon: Car, stats: getStats(["Vehicle", "Car", "Engine"]), isSeparating },
+                  { id: "veh_c", url: currentStems?.vehicles_close, label: "Vehicle (20-40m)", color: "#f87171", icon: Car, stats: getStats(["Vehicle", "Car", "Engine"]), isSeparating },
+                  { id: "veh_m", url: currentStems?.vehicles_medium, label: "Vehicle (40-60m)", color: "#fca5a5", icon: Car, stats: getStats(["Vehicle", "Car", "Engine"]), isSeparating },
+                  { id: "veh_f", url: currentStems?.vehicles_far, label: "Vehicle (60m+)", color: "#fecaca", icon: Car, stats: getStats(["Vehicle", "Car", "Engine"]), isSeparating }
+                );
 
-                </>
+                // 7. Distance-Based Voices
+                tracks.push(
+                  { id: "voice_vc", url: currentStems?.human_voice_very_close, label: "Voice (0-20m)", color: "#3b82f6", icon: Mic2, stats: getStats(["Voice", "Speech"]), isSeparating },
+                  { id: "voice_c", url: currentStems?.human_voice_close, label: "Voice (20-40m)", color: "#60a5fa", icon: Mic2, stats: getStats(["Voice", "Speech"]), isSeparating },
+                  { id: "voice_m", url: currentStems?.human_voice_medium, label: "Voice (40-60m)", color: "#93c5fd", icon: Mic2, stats: getStats(["Voice", "Speech"]), isSeparating },
+                  { id: "voice_f", url: currentStems?.human_voice_far, label: "Voice (60m+)", color: "#dbeafe", icon: Mic2, stats: getStats(["Voice", "Speech"]), isSeparating }
+                );
+
+                // 8. Distance-Based Footsteps
+                tracks.push(
+                  { id: "foot_vc", url: currentStems?.footsteps_very_close, label: "Footsteps (0-20m)", color: "#8b5cf6", icon: Footprints, stats: getStats(["Footstep"]), isSeparating },
+                  { id: "foot_c", url: currentStems?.footsteps_close, label: "Footsteps (20-40m)", color: "#a78bfa", icon: Footprints, stats: getStats(["Footstep"]), isSeparating },
+                  { id: "foot_m", url: currentStems?.footsteps_medium, label: "Footsteps (40-60m)", color: "#c4b5fd", icon: Footprints, stats: getStats(["Footstep"]), isSeparating },
+                  { id: "foot_f", url: currentStems?.footsteps_far, label: "Footsteps (60m+)", color: "#ede9fe", icon: Footprints, stats: getStats(["Footstep"]), isSeparating }
+                );
+
+                // Evaluate activity and track original sequential index
+                const sortedTracks = tracks.map((t, idx) => ({
+                  ...t,
+                  originalIndex: idx,
+                  isActive: t.url && !t.url.includes('_silent') ? 1 : 0
+                })).sort((a, b) => {
+                  if (a.id === 'master') return -1;
+                  if (b.id === 'master') return 1;
+                  if (a.isActive !== b.isActive) return b.isActive - a.isActive; // Active elements come first
+                  return a.originalIndex - b.originalIndex; // Maintain relative original chronological order
+                });
+
+                return sortedTracks.map(t => (
+                  <ForensicTrack
+                    key={t.id}
+                    url={t.url}
+                    label={t.label}
+                    color={t.color}
+                    icon={t.icon}
+                    masterPlaying={isPlaying}
+                    masterTime={currentTime}
+                    stats={t.stats}
+                    isSeparating={t.isSeparating}
+                  />
+                ));
+              })()}
             </div>
           )}
         </TabsContent>

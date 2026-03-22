@@ -157,14 +157,12 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                 
                 log(f"Loaded classification data. Keys: {list(cls_data.keys())}")
                 
-                # Use the Demucs-separated background track (Vocals completely removed) instead of the Master Mix
-                # merged_background is stereo shape (2, T). We should average to mono for simple slicing, or keep stereo.
-                # Let's use the mono y_back (which is just the first channel, or mean of channels: merged_background.mean(0))
-                # Wait, y_back was already defined as merged_background[0]. Let's make a clear mono background source:
-                forensic_base_audio = merged_background.mean(axis=0) # shape (T,)
-                forensic_sr = model.samplerate
+                # Use the Master Mix for Forensic Gating to guarantee Demucs does not erase valid high-frequency sounds (dogs/sirens).
+                y_full, sr_full = librosa.load(read_path, sr=None)
+                forensic_base_audio = y_full
+                forensic_sr = sr_full
                 
-                log(f"Using Demucs Background Stem for Forensic Gating. SR: {forensic_sr}, Shape: {forensic_base_audio.shape}")
+                log(f"Using Raw Master Mix for Forensic Gating (Fallback). SR: {forensic_sr}, Shape: {forensic_base_audio.shape}")
                 
                 # Enhanced Forensic Separation with Distance-Based Grouping
                 forensic_targets = {
