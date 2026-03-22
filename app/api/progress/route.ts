@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
                 const payload = `data: ${JSON.stringify({ percent: 100, text: "Separation Complete", done: true })}\n\n`;
                 try {
                     controller.enqueue(encoder.encode(payload));
-                    setTimeout(() => controller.close(), 100);
+                    setTimeout(() => { try { controller.close(); } catch(e){} }, 100);
                 } catch (e) {
                     // Closed by client
                 }
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
                 const payload = `data: ${JSON.stringify({ error: errorMsg })}\n\n`;
                 try {
                     controller.enqueue(encoder.encode(payload));
-                    setTimeout(() => controller.close(), 100);
+                    setTimeout(() => { try { controller.close(); } catch(e){} }, 100);
                 } catch (e) {
                     // Closed by client
                 }

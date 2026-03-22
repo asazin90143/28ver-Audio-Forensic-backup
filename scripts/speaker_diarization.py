@@ -97,6 +97,10 @@ def main():
     if not hf_token:
         print_progress(0, "Error: Missing HUGGINGFACE_TOKEN in .env")
         sys.exit(1)
+        
+    # Explicitly set HF_TOKEN in the environment so the HuggingFace Hub library
+    # recognizes it automatically for faster downloads and no warnings.
+    os.environ["HF_TOKEN"] = hf_token
 
     try:
         # Phase 1: Speaker Diarization (Counting & Timelining)
@@ -142,62 +146,144 @@ def main():
             
         print_progress(50, f"Detected {num_speakers} unique speaker(s). Loading SpeechBrain...")
         
-        # Phase 2: Speech separation using SpeechBrain SepFormer
-        # Using the WHAMR! model which is excellent for 2+ speakers in noisy environments
-        # Note: If num_speakers > 2 or 3, a more dynamic model might be needed, but Sepformer handles 2-3 well.
-        model_name = "speechbrain/sepformer-wsj02mix"
-        
-        # In this implementation, we will use Sepformer to separate the full audio, 
-        # and then map the diarization labels to the separated stems based on energy/activity.
-        # This is a robust approach when exact source count is unknown prior to PyAnnote.
-        sep_model = separator.from_hparams(source=model_name, savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj02mix'))
-        
-        print_progress(70, "Physically separating overlapping voices...")
-        
-        # Resample to 8kHz for SepFormer (it operates at 8000Hz)
+        # Phase 2: Dynamic Speech separation based on speaker count
+        if num_speakers <= 2:
+            model_name = "speechbrain/sepformer-wsj02mix"
+            print_progress(70, f"Detected {num_speakers} speakers. Running standard 2-channel SepFormer...")
+            sep_model = separator.from_hparams(source=model_name, savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj02mix'))
+        elif num_speakers == 3:
+            model_name = "speechbrain/sepformer-wsj03mix"
+            print_progress(70, f"Detected 3 speakers. Running advanced 3-channel SepFormer...")
+            sep_model = separator.from_hparams(source=model_name, savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj03mix'))
+        else:
+            model_name = "speechbrain/sepformer-wsj02mix" # The 2-channel handles the isolated 2-person clips
+            print_progress(70, f"Detected {num_speakers} speakers (>3). Engaging Temporal Sequential Isolation...")
+            sep_model = separator.from_hparams(source=model_name, savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj02mix'))
+
+        # Resample to 8kHz for SepFormer
         if sample_rate != 8000:
             import torchaudio.functional as F
             waveform_8k = F.resample(waveform, orig_freq=sample_rate, new_freq=8000)
         else:
             waveform_8k = waveform
-        
-        # Use separate_batch with in-memory tensor instead of separate_file (avoids torchcodec)
-        est_sources = sep_model.separate_batch(waveform_8k)
-        
-        # For WHAM/Sepformer, it typically outputs 2 sources. 
-        # So we process the separated sources and save them.
+            
         output_stems = []
-        
-        # Extract the tensor (batch, time, channels)
-        # Note: This is a simplified extraction assuming standard Sepformer output shapes
-        print_progress(90, "Exporting isolated voice stems...")
-        
-        try:
-            # Squeeze batch dimension if present
-            sources = est_sources.squeeze(0) 
-            num_separated = sources.shape[1] if len(sources.shape) > 1 else 1
 
-            for i in range(num_separated):
-                # Extract the 1D tensor for this source
-                source_wav = sources[:, i] if len(sources.shape) > 1 else sources
+        if num_speakers <= 3:
+            # Standard Separation
+            print_progress(80, "Physically separating overlapping voices...")
+            est_sources = sep_model.separate_batch(waveform_8k)
+            
+            print_progress(90, "Exporting isolated voice stems...")
+            try:
+                sources = est_sources.squeeze(0) 
+                num_separated = sources.shape[1] if len(sources.shape) > 1 else 1
+
+                for i in range(num_separated):
+                    source_wav = sources[:, i] if len(sources.shape) > 1 else sources
+                    source_wav = source_wav.unsqueeze(0) 
+                    
+                    out_path = os.path.join(output_dir, f"{job_id}_voice_{i+1}.wav")
+                    wav_numpy = source_wav.squeeze().cpu().numpy()
+                    
+                    # Optional AGC Normalization for safety
+                    max_val = np.max(np.abs(wav_numpy))
+                    if max_val > 0.0: wav_numpy = wav_numpy / max_val * 0.9
+                    
+                    sf.write(out_path, wav_numpy, 8000)
+                    
+                    output_stems.append({
+                        "name": f"Isolated Voice {i+1}",
+                        "path": f"/separated_audio/{job_id}_voice_{i+1}.wav",
+                        "type": "voice",
+                        "color": "bg-indigo-500" if i == 0 else "bg-pink-500"
+                    })
+            except Exception as sep_e:
+                 print_progress(95, f"Warning during extraction: {str(sep_e)}")
+                 
+        else:
+            # TEMPORAL SEQUENTIAL ISOLATION (4+ Speakers)
+            sr_8k = 8000
+            duration_samples = waveform_8k.shape[1]
+            
+            stitched_tracks = {speaker: np.zeros(duration_samples, dtype=np.float32) for speaker in speaker_times.keys()}
+            
+            total_turns = sum(1 for _ in annotation.itertracks())
+            turn_idx = 0
+            
+            # Use PyAnnote generator to target exact timestamps
+            for turn, _, speaker in annotation.itertracks(yield_label=True):
+                turn_idx += 1
+                if turn_idx % max(1, total_turns // 5) == 0:
+                    print_progress(70 + int((turn_idx / total_turns) * 20), f"Sequential Isolation: Turn {turn_idx}/{total_turns}...")
                 
-                # Normalize and ensure 2D for torchaudio [channels, time]
-                source_wav = source_wav.unsqueeze(0) 
+                # Context Window Padding (0.5s pre/post-roll)
+                start_sec = max(0.0, turn.start - 0.5)
+                end_sec = min(duration_samples / sr_8k, turn.end + 0.5)
+                
+                start_samp = int(start_sec * sr_8k)
+                end_samp = int(end_sec * sr_8k)
+                
+                if end_samp - start_samp < 400: continue
+                    
+                chunk = waveform_8k[:, start_samp:end_samp]
+                
+                # Separate just this chunk
+                try:
+                    chunk_sources = sep_model.separate_batch(chunk).squeeze(0) # shape: [time, 2]
+                except Exception:
+                    continue
+                
+                # Energy calculation to identify the target speaker stem
+                core_start = int((turn.start - start_sec) * sr_8k)
+                core_end = int((turn.end - start_sec) * sr_8k)
+                core_start = max(0, min(core_start, chunk_sources.shape[0]))
+                core_end = max(0, min(core_end, chunk_sources.shape[0]))
+                
+                if core_end > core_start:
+                    energy_0 = torch.mean(chunk_sources[core_start:core_end, 0] ** 2)
+                    energy_1 = torch.mean(chunk_sources[core_start:core_end, 1] ** 2)
+                    best_idx = 0 if energy_0 > energy_1 else 1
+                else:
+                    best_idx = 0
+                    
+                best_audio = chunk_sources[:, best_idx].cpu().numpy()
+                
+                # Cross-Fade Stitching (50ms) to prevent boundary pops 
+                fade_len = int(0.05 * sr_8k)
+                fade_len = min(fade_len, len(best_audio) // 2)
+                if fade_len > 0:
+                    fade_in = np.linspace(0, 1, fade_len)
+                    fade_out = np.linspace(1, 0, fade_len)
+                    best_audio[:fade_len] *= fade_in
+                    best_audio[-fade_len:] *= fade_out
+                
+                slice_len = len(best_audio)
+                if start_samp + slice_len > duration_samples:
+                    slice_len = duration_samples - start_samp
+                    best_audio = best_audio[:slice_len]
+                    
+                # Blend snippet into the master multi-track matrix
+                stitched_tracks[speaker][start_samp:start_samp+slice_len] += best_audio
+            
+            print_progress(95, "Applying AGC Volume Normalization to assembled timelines...")
+            i = 0
+            for speaker, track in stitched_tracks.items():
+                # Post-Stitch Volume Normalization (AGC)
+                max_val = np.max(np.abs(track))
+                if max_val > 0.02: 
+                    track = track / max_val * 0.9
                 
                 out_path = os.path.join(output_dir, f"{job_id}_voice_{i+1}.wav")
-                # Save using soundfile (more compatible than torchaudio.save)
-                wav_numpy = source_wav.squeeze().cpu().numpy()
-                sf.write(out_path, wav_numpy, 8000)
+                sf.write(out_path, track, 8000)
                 
                 output_stems.append({
-                    "name": f"Isolated Voice {i+1}",
+                    "name": f"Isolated Voice {i+1} ({speaker})",
                     "path": f"/separated_audio/{job_id}_voice_{i+1}.wav",
                     "type": "voice",
                     "color": "bg-indigo-500" if i == 0 else "bg-pink-500"
                 })
-        except Exception as sep_e:
-             # Fallback if SpeechBrain tensor shape is tricky
-             print_progress(95, f"Warning during extraction: {str(sep_e)}")
+                i += 1
         
         print_progress(100, f"Successfully isolated {len(output_stems)} voices.")
         
