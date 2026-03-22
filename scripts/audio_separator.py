@@ -157,8 +157,14 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                 
                 log(f"Loaded classification data. Keys: {list(cls_data.keys())}")
                 
-                y_full, sr_full = librosa.load(read_path, sr=None)
-                log(f"Loaded audio with librosa. SR: {sr_full}, Shape: {y_full.shape}")
+                # Use the Demucs-separated background track (Vocals completely removed) instead of the Master Mix
+                # merged_background is stereo shape (2, T). We should average to mono for simple slicing, or keep stereo.
+                # Let's use the mono y_back (which is just the first channel, or mean of channels: merged_background.mean(0))
+                # Wait, y_back was already defined as merged_background[0]. Let's make a clear mono background source:
+                forensic_base_audio = merged_background.mean(axis=0) # shape (T,)
+                forensic_sr = model.samplerate
+                
+                log(f"Using Demucs Background Stem for Forensic Gating. SR: {forensic_sr}, Shape: {forensic_base_audio.shape}")
                 
                 # Enhanced Forensic Separation with Distance-Based Grouping
                 forensic_targets = {
@@ -201,7 +207,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                         
                         # Generate separate audio for each distance range
                         for dist_range, events in distance_groups.items():
-                            out_y = np.zeros_like(y_full)
+                            out_y = np.zeros_like(forensic_base_audio)
                             
                             for event in events:
                                 start_s = event["time"]
@@ -209,16 +215,16 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                                 window_size = 0.5 if dist_range in ["very_close", "close"] else 1.0
                                 end_s = start_s + window_size
                                 
-                                start_idx = int(start_s * sr_full)
-                                end_idx = int(end_s * sr_full)
+                                start_idx = int(start_s * forensic_sr)
+                                end_idx = int(end_s * forensic_sr)
                                 
-                                if end_idx < len(y_full):
+                                if end_idx < len(forensic_base_audio):
                                     # Apply fade in/out for smoother transitions
-                                    fade_samples = int(0.05 * sr_full)  # 50ms fade
-                                    segment = y_full[start_idx:end_idx]
+                                    fade_samples = int(0.05 * forensic_sr)  # 50ms fade
+                                    segment = np.copy(forensic_base_audio[start_idx:end_idx])
                                     
                                     # Apply fade in
-                                    if len(segment) > fade_samples:
+                                    if len(segment) > fade_samples * 2:
                                         fade_in = np.linspace(0, 1, fade_samples)
                                         segment[:fade_samples] *= fade_in
                                         
@@ -230,29 +236,29 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                             
                             # Save distance-grouped stem
                             f_path = os.path.join(gen_dir, f"{key}_{dist_range}.wav")
-                            wavfile.write(f_path, sr_full, (out_y * 32767).astype(np.int16))
+                            wavfile.write(f_path, forensic_sr, (out_y * 32767).astype(np.int16))
                             final_stems[f"{key}_{dist_range}"] = f"/separated_audio/generated/{job_id_clean}/{key}_{dist_range}.wav"
                             log(f"Created {key}_{dist_range} with {len(events)} events")
                         
                         # Also create a combined stem for this category
-                        combined_out_y = np.zeros_like(y_full)
+                        combined_out_y = np.zeros_like(forensic_base_audio)
                         for match in matches:
                             start_s = match["time"]
                             end_s = start_s + 0.8  # Slightly longer window for combined
-                            start_idx = int(start_s * sr_full)
-                            end_idx = int(end_s * sr_full)
-                            if end_idx < len(y_full):
-                                combined_out_y[start_idx:end_idx] = y_full[start_idx:end_idx]
+                            start_idx = int(start_s * forensic_sr)
+                            end_idx = int(end_s * forensic_sr)
+                            if end_idx < len(forensic_base_audio):
+                                combined_out_y[start_idx:end_idx] = forensic_base_audio[start_idx:end_idx]
                         
                         combined_path = os.path.join(gen_dir, f"{key}.wav")
-                        wavfile.write(combined_path, sr_full, (combined_out_y * 32767).astype(np.int16))
+                        wavfile.write(combined_path, forensic_sr, (combined_out_y * 32767).astype(np.int16))
                         final_stems[key] = f"/separated_audio/generated/{job_id_clean}/{key}.wav"
                         log(f"Created combined {key} stem")
                         
                     else:
                         # Don't mark as empty, create a silent stem instead
                         silent_path = os.path.join(gen_dir, f"{key}_silent.wav")
-                        wavfile.write(silent_path, sr_full, np.zeros(len(y_full), dtype=np.int16))
+                        wavfile.write(silent_path, forensic_sr, np.zeros(len(forensic_base_audio), dtype=np.int16))
                         final_stems[key] = f"/separated_audio/generated/{job_id_clean}/{key}_silent.wav"
                         log(f"Created silent stem for {key}")
                 

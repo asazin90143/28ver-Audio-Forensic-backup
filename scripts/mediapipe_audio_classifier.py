@@ -88,7 +88,25 @@ def map_to_forensic_category(mediapipe_category):
         "Glass": "Impact / Breach",
         "Smash": "Impact / Breach",
         "Footsteps": "Footsteps",
-        "Clatter": "Impact / Breach"
+        "Clatter": "Impact / Breach",
+        
+        # Animal Signal
+        "Animal": "Animal Signal",
+        "Dog": "Animal Signal",
+        "Bark": "Animal Signal",
+        "Cat": "Animal Signal",
+        "Meow": "Animal Signal",
+        "Bird": "Animal Signal",
+        "Chirp": "Animal Signal",
+        "Roar": "Animal Signal",
+        "Livestock": "Animal Signal",
+        "Howl": "Animal Signal",
+        
+        # Atmospheric Wind
+        "Wind": "Atmospheric Wind",
+        "Thunder": "Atmospheric Wind",
+        "Rain": "Atmospheric Wind",
+        "Storm": "Atmospheric Wind"
     }
     
     # Exact match
