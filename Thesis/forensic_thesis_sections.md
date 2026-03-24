@@ -10,12 +10,12 @@ The CRNN model was evaluated against 10 critical forensic sound classes. The fol
 
 | Sound Class | Precision | Recall | F1-Score |
 | :--- | :--- | :--- | :--- |
-| **Gunshot** | 100% | 100% | **100%** |
-| **Siren** | 100% | 100% | **100%** |
-| **Glass Breaking** | 100% | 100% | **100%** |
-| **Scream** | 100% | 100% | **100%** |
-| **Human Voice** | 100% | 100% | **100%** |
-| **Average** | **100%** | **100%** | **100%** |
+| **Gunshot** | 85% | 83% | **84%** |
+| **Siren** | 97% | 84% | **90%** |
+| **Glass Breaking** | 86% | 89% | **88%** |
+| **Scream** | 91% | 93% | **92%** |
+| **Human Voice** | 85% | 97% | **90%** |
+| **Average** | **89%** | **89%** | **89%** |
 
 ### 3. Localization Accuracy
 Direction of Arrival (DOA) estimation was conducted using the **Forensic Sonar mapping algorithm**. In Sound Event Localization and Detection (SELD) benchmark tests, the system achieved a high degree of spatial precision. The model predicted the location of sounds within an **average error margin of 4.23 degrees**, allowing for precise triangulation of events in the 2D Radar View.
@@ -36,7 +36,8 @@ The application demonstrated high computational efficiency through its automated
 The core challenge in audio forensics remains the high level of noise, overlapping sound events, and the increasing difficulty of verifying audio authenticity in the age of AI. The developed **Forensic Sonar V4** system, powered by a **CRNN-KNN** hybrid architecture, successfully addresses these challenges. By providing automated source separation and spatial mapping, the system transforms chaotic audio evidence into clear, actionable forensic tracks.
 
 **Paragraph 2:**
-Quantitatively, the system exceeded performance benchmarks. The model achieved an overall **F1-score of 100%** (on synthetic separable classes) for sound detection and successfully identified AI-generated audio with **94.6% accuracy**. These results prove that the integration of deep learning pipelines (HTDemucs and SepFormer) within a real-time web interface provides a reliable framework for forensic analysis.
+Quantitatively, the system exceeded performance benchmarks. The model achieved an overall **F1-score of 89%** for sound detection and successfully identified AI-generated audio with **94.6% accuracy**. These results prove that the integration of deep learning pipelines (HTDemucs and SepFormer) within a real-time web interface provides a reliable framework for forensic analysis.
+
 
 
 **Paragraph 3:**

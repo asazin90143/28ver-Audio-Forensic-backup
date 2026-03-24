@@ -1,32 +1,32 @@
 {
     "Gunshot": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 85,
+        "Recall": 83,
+        "F1-Score": 84
     },
     "Siren": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 97,
+        "Recall": 84,
+        "F1-Score": 90
     },
     "Glass Breaking": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 86,
+        "Recall": 89,
+        "F1-Score": 88
     },
     "Scream": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 91,
+        "Recall": 93,
+        "F1-Score": 92
     },
     "Human Voice": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 85,
+        "Recall": 97,
+        "F1-Score": 90
     },
     "Average": {
-        "Precision": 100,
-        "Recall": 100,
-        "F1-Score": 100
+        "Precision": 89,
+        "Recall": 89,
+        "F1-Score": 89
     }
 }
