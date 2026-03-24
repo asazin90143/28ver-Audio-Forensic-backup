@@ -86,7 +86,8 @@ def main():
     )
     
     # Extract Feature Extractor
-    feature_extractor = models.Model(inputs=model.input, outputs=model.get_layer('embedding').output)
+    feature_extractor = models.Model(inputs=model.inputs, outputs=model.get_layer('embedding').output)
+
     
     # 3. Train KNN on Embeddings
     print("Extracting embeddings for KNN...")

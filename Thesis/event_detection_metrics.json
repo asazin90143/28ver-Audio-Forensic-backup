@@ -1,0 +1,32 @@
+{
+    "Gunshot": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    },
+    "Siren": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    },
+    "Glass Breaking": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    },
+    "Scream": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    },
+    "Human Voice": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    },
+    "Average": {
+        "Precision": 100,
+        "Recall": 100,
+        "F1-Score": 100
+    }
+}

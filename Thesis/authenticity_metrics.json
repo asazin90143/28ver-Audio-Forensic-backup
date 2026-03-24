@@ -1,0 +1,12 @@
+{
+    "Overall Accuracy": 94.6,
+    "Real Audio Detection": {
+        "Precision": 94.3,
+        "Recall (True Negative Rate)": 94.7,
+        "False Positive Rate": 5.3
+    },
+    "AI-Generated Detection": {
+        "Precision": 94.9,
+        "Recall (True Positive Rate)": 94.5
+    }
+}

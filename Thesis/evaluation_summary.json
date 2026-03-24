@@ -1,0 +1,13 @@
+{
+    "execution_time_seconds": 148.45,
+    "status": "success",
+    "artifacts_generated": [
+        "training_loss_curve.png",
+        "event_detection_metrics.json",
+        "doa_estimation_scatter.png",
+        "doa_error_histogram.png",
+        "doa_metrics.json",
+        "authenticity_confusion_matrix.png",
+        "authenticity_metrics.json"
+    ]
+}
