@@ -415,6 +415,7 @@ export default function SonarView({
 
       const formData = new FormData();
       formData.append("audio", audioBlob, safeFileName);
+      formData.append("min_speakers", "3");
 
       const response = await fetch("/api/diarize-audio", {
         method: "POST",

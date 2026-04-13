@@ -74,6 +74,8 @@ def main():
     input_file = sys.argv[1]
     output_dir = sys.argv[2]
     job_id = sys.argv[3]
+    min_speakers = int(sys.argv[4]) if len(sys.argv) > 4 else 2
+    max_speakers = int(sys.argv[5]) if len(sys.argv) > 5 else 10
 
     os.makedirs(output_dir, exist_ok=True)
     
@@ -122,8 +124,12 @@ def main():
             audio_np = audio_np.mean(axis=1)
         waveform = torch.tensor(audio_np).unsqueeze(0).float()
         
-        print_progress(30, "Analyzing audio for distinct speakers...")
-        diarization = pipeline({"waveform": waveform, "sample_rate": sample_rate})
+        print_progress(30, f"Analyzing audio for distinct speakers (min={min_speakers}, max={max_speakers})...")
+        diarization = pipeline(
+            {"waveform": waveform, "sample_rate": sample_rate},
+            min_speakers=min_speakers,
+            max_speakers=max_speakers
+        )
         
         # PyAnnote 3.1 returns a DiarizeOutput wrapper; extract the Annotation object
         if hasattr(diarization, 'speaker_diarization'):

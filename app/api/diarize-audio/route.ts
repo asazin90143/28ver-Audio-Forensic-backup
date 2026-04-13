@@ -124,12 +124,17 @@ export async function POST(request: NextRequest) {
         const outputDir = path.join(process.cwd(), "public", "separated_audio");
         if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
+        const minSpeakers = formData.get("min_speakers")?.toString() || "2";
+        const maxSpeakers = formData.get("max_speakers")?.toString() || "10";
+
         // 2. Add to Queue and Run Voice Isolation Pipeline
         const isolation = await analysisQueue.enqueue(jobID + "_diarization", async () => {
             return await runPython("speaker_diarization.py", [
                 `"${tempFilePath}"`,
                 `"${outputDir}"`,
-                `"${jobID}"`
+                `"${jobID}"`,
+                minSpeakers,
+                maxSpeakers
             ], jobID);
         });
 
@@ -144,7 +149,10 @@ export async function POST(request: NextRequest) {
             status: "Success",
             speakers: isolation.speakers_detected_by_pyannote,
             stems: processedStems,
-            diarization: isolation.diarization_summary
+            diarization: isolation.diarization_summary,
+            method: isolation.method,
+            collisions_detected: isolation.collisions_detected,
+            collisions_resolved: isolation.collisions_resolved
         });
 
     } catch (error: any) {
