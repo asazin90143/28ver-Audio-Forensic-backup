@@ -425,17 +425,26 @@ export default function SonarView({
 
       if (!response.ok) throw new Error("Voice Isolation failed");
       const result = await response.json();
+      
+      console.log("[Diarize] Full API response:", JSON.stringify(result, null, 2));
+      console.log("[Diarize] Speakers detected:", result.speakers);
+      console.log("[Diarize] Stems array:", result.stems);
+      console.log("[Diarize] Method used:", result.method);
+      console.log("[Diarize] Collisions resolved:", result.collisions_resolved);
 
-      if (result.stems && setCurrentStems) {
+      if (result.stems && result.stems.length > 0 && setCurrentStems) {
+         console.log("[Diarize] Setting isolatedVoices with", result.stems.length, "stems");
          setCurrentStems((prev: any) => ({
              ...prev,
              isolatedVoices: result.stems
          }));
          if (setShowStems) setShowStems(true);
+      } else {
+         console.warn("[Diarize] No stems returned or empty array");
       }
 
       if (result.speakers) {
-         alert(`Voice Isolation Complete! Detected ${result.speakers} unique speaker(s).`);
+         alert(`Voice Isolation Complete! Detected ${result.speakers} unique speaker(s). Method: ${result.method || 'Unknown'}. Collisions resolved: ${result.collisions_resolved || 0}`);
       }
 
     } catch (error: any) {
