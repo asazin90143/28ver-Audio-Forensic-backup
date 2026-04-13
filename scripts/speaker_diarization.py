@@ -112,6 +112,17 @@ def main():
             token=hf_token
         )
 
+        try:
+            pyannote_ckpt = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\pyannote_finetune\checkpoint_epoch_20.pt"
+            if os.path.exists(pyannote_ckpt):
+                print_progress(15, "Injecting custom PyAnnote fine-tuned segmentation weights...")
+                custom_state = torch.load(pyannote_ckpt, map_location="cpu", weights_only=False)
+                if hasattr(pipeline, '_segmentation') and hasattr(pipeline._segmentation, 'model'):
+                    pipeline._segmentation.model.load_state_dict(custom_state.get("model_state", custom_state))
+                    print(json.dumps({"progress": 15, "message": "✅ Custom PyAnnote model loaded.", "status": "processing"}))
+        except Exception as e:
+            print(json.dumps({"progress": 15, "message": f"⚠️ Custom model load failed: {e}", "status": "processing"}))
+
         # Move to GPU if available
         if torch.cuda.is_available():
             pipeline.to(torch.device("cuda"))
@@ -213,17 +224,40 @@ def main():
         else:
             print_progress(55, "No overlapping speech detected. Using direct isolation...")
         
-        # --- Step 2C: SpeechBrain Loading ---
-        # NOTE: The off-the-shelf SepFormer (wsj02mix/wsj03mix) is trained on clean
-        # studio speech at 8kHz. When fed real-world forensic audio, it produces garbled
-        # output due to: (1) 44.1kHz→8kHz resampling destroying clarity, (2) the model
-        # hallucinating on noisy non-studio audio. 
-        #
-        # SpeechBrain will be RE-ENABLED once a custom fine-tuned SepFormer+DANN model
-        # is trained on forensic data (Phase 2-3 of PLAN_VOICE_ISOLATION.md).
-        # Until then, collisions are handled by direct slicing — giving mixed-but-clear
-        # audio rather than garbled-but-separated audio.
-        sep_model = None  # Disabled: pre-trained model quality insufficient for forensic use
+        # --- Step 2C: Lazy SpeechBrain Loading ---
+        sep_model = None
+        if num_collisions > 0:
+            try:
+                from speechbrain.inference.separation import SepformerSeparation as separator
+                import tempfile
+                import torch.nn as nn
+                
+                model_name = "speechbrain/sepformer-wsj03mix"
+                model_dir = "sepformer-wsj03mix"
+                print_progress(60, "Loading base SepFormer structure...")
+                
+                sep_model = separator.from_hparams(
+                    source=model_name,
+                    savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', model_dir)
+                )
+                
+                # --- LOAD CUSTOM FINE-TUNED SEPFORMER+DANN MODEL ---
+                custom_sepformer_ckpt = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\sepformer_dann\checkpoint_epoch_2225.pt"
+                if os.path.exists(custom_sepformer_ckpt):
+                    print_progress(65, "Injecting custom trained SepFormer+DANN weights (epoch 2225)...")
+                    custom_state = torch.load(custom_sepformer_ckpt, map_location="cpu", weights_only=False)
+                    if "sep_state" in custom_state and hasattr(sep_model, 'mods'):
+                        # Using torch.nn.ModuleDict handles standard dictionary loading mapping exactly to the nested modules
+                        nn.ModuleDict(sep_model.mods).load_state_dict(custom_state['sep_state'])
+                        print_progress(65, "✅ Custom SepFormer+DANN weights loaded successfully!")
+                    else:
+                        print_progress(65, "⚠️ Custom model parsing error, using base model.")
+                else:
+                    print_progress(65, "⚠️ Custom weights file not found!")
+                
+            except Exception as sb_err:
+                print_progress(65, f"SpeechBrain load failed: {sb_err}. Falling back to direct slicing.")
+                sep_model = None
         
         # --- Step 2D: Build collision lookup for fast segment classification ---
         def is_in_collision(time_start, time_end):
@@ -468,7 +502,7 @@ def main():
             spk_idx += 1
         
         # --- Final Report ---
-        method_used = "PyAnnote Direct Isolation (SpeechBrain disabled — awaiting custom model)"
+        method_used = "Custom Hybrid (PyAnnote finetune + SepFormer DANN)" if collisions_resolved > 0 else "Custom PyAnnote Direct"
         print_progress(100, f"Done! Isolated {len(output_stems)} voices via {method_used}. Overlapping zones: {num_collisions}")
         
         result = {
