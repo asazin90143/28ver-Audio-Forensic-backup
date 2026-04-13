@@ -1,4 +1,4 @@
-﻿
+
 # Dependencies
 node_modules/
 .pnp
@@ -58,3 +58,7 @@ public/separated_audio/
 Recording_*.webm
 Thumbs.db
 node_modules
+
+# Pretrained Models
+pretrained_models/custom/*.keras
+pretrained_models/custom/*.pt
