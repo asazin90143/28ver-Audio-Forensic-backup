@@ -9,3 +9,5 @@ librosa
 fastapi
 python-multipart
 uvicorn
+tensorflow-hub
+speechbrain
