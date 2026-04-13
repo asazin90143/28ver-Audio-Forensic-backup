@@ -189,9 +189,13 @@ export async function POST(request: NextRequest) {
     const outputDir = path.join(process.cwd(), "public", "separated_audio");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    // Only run Classification (YAMNet) - FAST via Queue
+    const useCustomModel = process.env.USE_CUSTOM_MODEL === "true";
+    const scriptToRun = useCustomModel ? "tf_audio_classifier.py" : "mediapipe_audio_classifier.py";
+    console.log(`[Forensic] Classifier Mode: ${useCustomModel ? "TF Keras (Advanced)" : "MediaPipe (Standard)"}`);
+
+    // Only run Classification - FAST via Queue
     const classification = await analysisQueue.enqueue(jobID + "_classify", async () => {
-      return await runPython("mediapipe_audio_classifier.py", [
+      return await runPython(scriptToRun, [
         `"${tempFilePath}"`,
         `"${jobID}"`
       ]);
