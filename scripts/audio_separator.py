@@ -7,6 +7,10 @@ import warnings
 import numpy as np
 from scipy.io import wavfile
 import tempfile
+import torchaudio
+if not hasattr(torchaudio, "list_audio_backends"):
+    torchaudio.list_audio_backends = lambda: ["soundfile"]
+
 
 # FORCE SILENCE
 warnings.filterwarnings("ignore")
@@ -252,6 +256,65 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                         wavfile.write(combined_path, forensic_sr, (combined_out_y * 32767).astype(np.int16))
                         final_stems[key] = f"/separated_audio/generated/{job_id_clean}/{key}.wav"
                         log(f"Created combined {key} stem")
+                        
+                        # --- Multi-Speaker Isolation (Phase 5 Diarization) ---
+                        if key == "human_voice":
+                            hf_token = os.environ.get("HUGGINGFACE_TOKEN")
+                            if hf_token:
+                                log(f"HUGGINGFACE_TOKEN detected. Starting multi-speaker diarization for N-speakers...")
+                                try:
+                                    from pyannote.audio import Pipeline
+                                    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
+                                    import torch
+                                    if torch.cuda.is_available():
+                                        pipeline.to(torch.device("cuda"))
+                                        
+                                    diarization = pipeline(read_path)
+                                    
+                                    # Group segments by speaker
+                                    speaker_segments = {}
+                                    for turn, _, speaker in diarization.itertracks(yield_label=True):
+                                        if speaker not in speaker_segments:
+                                            speaker_segments[speaker] = []
+                                        speaker_segments[speaker].append((turn.start, turn.end))
+                                        
+                                    log(f"Diarization complete! Found {len(speaker_segments)} unique speakers.")
+                                    
+                                    # Create isolated stems per speaker
+                                    isolated_voices_list = []
+                                    for speaker, segs in speaker_segments.items():
+                                        spk_y = np.zeros_like(forensic_base_audio)
+                                        for start_s, end_s in segs:
+                                            # Apply padding for natural isolation
+                                            start_s = max(0, start_s - 0.2)
+                                            end_s = min(len(forensic_base_audio) / forensic_sr, end_s + 0.2)
+                                            
+                                            start_idx = int(start_s * forensic_sr)
+                                            end_idx = int(end_s * forensic_sr)
+                                            
+                                            if end_idx <= len(forensic_base_audio):
+                                                segment = np.copy(forensic_base_audio[start_idx:end_idx])
+                                                
+                                                # Smooth fade
+                                                fade_len = int(0.05 * forensic_sr)
+                                                if len(segment) > fade_len * 2:
+                                                    segment[:fade_len] *= np.linspace(0, 1, fade_len)
+                                                    segment[-fade_len:] *= np.linspace(1, 0, fade_len)
+                                                    
+                                                spk_y[start_idx:end_idx] = segment
+                                        
+                                        spk_path = os.path.join(gen_dir, f"human_voice_{speaker.lower()}.wav")
+                                        wavfile.write(spk_path, forensic_sr, (spk_y * 32767).astype(np.int16))
+                                        
+                                        url = f"/separated_audio/generated/{job_id_clean}/human_voice_{speaker.lower()}.wav"
+                                        final_stems[f"human_voice_{speaker.lower()}"] = url
+                                        isolated_voices_list.append({"name": f"{speaker.replace('SPEAKER_', 'Speaker ')}", "url": url})
+                                        log(f"Isolated {speaker} successfully.")
+                                        
+                                    final_stems["isolatedVoices"] = isolated_voices_list
+                                
+                                except Exception as d_err:
+                                    log(f"Diarization skipped/failed: {d_err}")
                         
                     else:
                         # Don't mark as empty, create a silent stem instead
