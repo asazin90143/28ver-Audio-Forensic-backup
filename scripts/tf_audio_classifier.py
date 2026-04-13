@@ -143,7 +143,7 @@ def classify_audio(audio_path, job_id):
             confidence = float(sub_preds[top_idx])
             
             # Thresholding
-            if confidence > 0.05:
+            if confidence > 0.4:
                 raw_label = sub_classes[top_idx]
                 ui_category, ui_label = map_to_ui_category(raw_label)
                 
@@ -188,6 +188,8 @@ def classify_audio(audio_path, job_id):
 
         return {
             "jobID": job_id,
+            "duration": round(total_samples / 16000.0, 2),
+            "sampleRate": 16000,
             "soundEvents": all_detections,
             "categorySummary": summary_events,
             "allDetections": all_detections,

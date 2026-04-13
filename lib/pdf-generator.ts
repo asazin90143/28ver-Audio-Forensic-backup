@@ -66,8 +66,8 @@ export const generatePDFReport = async (
       head: [["PARAMETER", "DETECTED VALUE"]],
       body: [
         ["FILE SOURCE", audioData.name],
-        ["DURATION", `${audioData.duration?.toFixed(2)}s`],
-        ["DETECTED SPEAKERS", new Set(results.diarization?.segments.map((s: any) => s.speaker)).size.toString()],
+        ["DURATION", `${Number(results.duration || audioData.duration || 0).toFixed(2)}s`],
+        ["DETECTED EVENTS", results.soundEvents?.length?.toString() || "0"],
         ["AUDIO FINGERPRINT", Math.random().toString(36).substring(2, 15).toUpperCase()], // Sim
       ],
       theme: "grid",
