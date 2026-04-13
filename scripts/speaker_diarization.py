@@ -209,34 +209,21 @@ def main():
         
         num_collisions = len(collisions)
         if num_collisions > 0:
-            print_progress(55, f"Found {num_collisions} overlapping speech zone(s). Loading SpeechBrain...")
+            print_progress(55, f"Found {num_collisions} overlapping speech zone(s).")
         else:
             print_progress(55, "No overlapping speech detected. Using direct isolation...")
         
-        # --- Step 2C: Lazy SpeechBrain Loading (only if collisions exist) ---
-        sep_model = None
-        if num_collisions > 0:
-            try:
-                # Determine the maximum number of overlapping speakers in any single collision
-                max_overlap_speakers = max(len(c[2]) for c in collisions)
-                
-                if max_overlap_speakers >= 3:
-                    model_name = "speechbrain/sepformer-wsj03mix"
-                    model_dir = "sepformer-wsj03mix"
-                    print_progress(60, "Loading 3-channel SepFormer for complex overlap...")
-                else:
-                    model_name = "speechbrain/sepformer-wsj02mix"
-                    model_dir = "sepformer-wsj02mix"
-                    print_progress(60, "Loading 2-channel SepFormer for overlap unmixing...")
-                
-                sep_model = separator.from_hparams(
-                    source=model_name,
-                    savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', model_dir)
-                )
-                print_progress(65, "SpeechBrain loaded successfully.")
-            except Exception as sb_err:
-                print_progress(65, f"SpeechBrain load failed: {sb_err}. Falling back to direct slicing.")
-                sep_model = None
+        # --- Step 2C: SpeechBrain Loading ---
+        # NOTE: The off-the-shelf SepFormer (wsj02mix/wsj03mix) is trained on clean
+        # studio speech at 8kHz. When fed real-world forensic audio, it produces garbled
+        # output due to: (1) 44.1kHz→8kHz resampling destroying clarity, (2) the model
+        # hallucinating on noisy non-studio audio. 
+        #
+        # SpeechBrain will be RE-ENABLED once a custom fine-tuned SepFormer+DANN model
+        # is trained on forensic data (Phase 2-3 of PLAN_VOICE_ISOLATION.md).
+        # Until then, collisions are handled by direct slicing — giving mixed-but-clear
+        # audio rather than garbled-but-separated audio.
+        sep_model = None  # Disabled: pre-trained model quality insufficient for forensic use
         
         # --- Step 2D: Build collision lookup for fast segment classification ---
         def is_in_collision(time_start, time_end):
@@ -481,8 +468,8 @@ def main():
             spk_idx += 1
         
         # --- Final Report ---
-        method_used = "Hybrid (PyAnnote + SpeechBrain)" if collisions_resolved > 0 else "PyAnnote Direct Isolation"
-        print_progress(100, f"Done! Isolated {len(output_stems)} voices. Method: {method_used}. Collisions resolved: {collisions_resolved}")
+        method_used = "PyAnnote Direct Isolation (SpeechBrain disabled — awaiting custom model)"
+        print_progress(100, f"Done! Isolated {len(output_stems)} voices via {method_used}. Overlapping zones: {num_collisions}")
         
         result = {
             "status": "Success",
