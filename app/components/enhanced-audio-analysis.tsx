@@ -534,7 +534,8 @@ export default function EnhancedAudioAnalysis({ audioData, ...props }: EnhancedA
 
     const handleMouseMove = (e: MouseEvent) => {
       const rect = canvas.getBoundingClientRect()
-      const x = e.clientX - rect.left
+      const scaleX = canvas.width / rect.width
+      const x = (e.clientX - rect.left) * scaleX
 
       // Handle Hover
       if (audioData?.analysisResults?.frequencySpectrum) {
@@ -551,7 +552,7 @@ export default function EnhancedAudioAnalysis({ audioData, ...props }: EnhancedA
 
       // Handle Drag
       if (isDragging) {
-        const deltaX = e.clientX - lastX
+        const deltaX = (e.clientX - lastX) * scaleX
         setPan2D(prev => {
           const spectrum = audioData?.analysisResults?.frequencySpectrum || []
           const totalWidth = (canvas.width / spectrum.length) * zoom2D * spectrum.length
