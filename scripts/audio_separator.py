@@ -264,7 +264,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                                 log(f"HUGGINGFACE_TOKEN detected. Starting multi-speaker diarization for N-speakers...")
                                 try:
                                     from pyannote.audio import Pipeline
-                                    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", use_auth_token=hf_token)
+                                    pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1", token=hf_token)
                                     import torch
                                     if torch.cuda.is_available():
                                         pipeline.to(torch.device("cuda"))
