@@ -20,29 +20,45 @@ The CRNN model was evaluated against 10 critical forensic sound classes. The fol
 ### 3. Localization Accuracy
 Direction of Arrival (DOA) estimation was conducted using the **Forensic Sonar mapping algorithm**. In Sound Event Localization and Detection (SELD) benchmark tests, the system achieved a high degree of spatial precision. The model predicted the location of sounds within an **average error margin of 4.23 degrees**, allowing for precise triangulation of events in the 2D Radar View.
 
+![DOA Estimation Errors](doa_error_histogram.png)
+*Figure 1: Histogram demonstrating the extremely tight distribution of localization angle errors clustered near zero degrees.*
+
 ### 4. Authenticity Verification & Metrics
 The authenticity module, designed to distinguish between **AI-generated (Deepfake)** and **Acoustic (Real)** audio, utilized spectral consistency checks and phase irregularity analysis. The system achieved an overall accuracy of **94.6%**. 
 - **True Positives (Fake Caught)**: 94.5%
 - **False Positives (Real flagged as Fake)**: 5.3%
 
-*(Refer to `advanced_roc_curve.png` for the Receiver Operating Characteristic (ROC) curve outlining the High Area Under the Curve (AUC) for AI boundary detection, and `advanced_pr_curve.png` illustrating the precision-recall balance for critical forensic anomalies like gunshots).*
+![AI ROC Curve](advanced_roc_curve.png)
+*Figure 2: Receiver Operating Characteristic (ROC) curve outlining the system's ability to cleanly separate real voice samples from emerging AI/Deepfake generator architectures, represented by a high Area Under the Curve (AUC).*
+
+![Precision Recall Curve](advanced_pr_curve.png)
+*Figure 3: Multi-class Precision-Recall curve illustrating the handling of heavily imbalanced data (e.g., maintaining high precision even for rare events like Gunshots).*
 
 ### 5. System Efficiency & Processing Latency
 The application demonstrated high computational efficiency dynamically scaled through JobQueue management. Leveraging the lightweight mode versus the deep unmixing mode offered high utility variance:
 Fast classifications (MediaPipe + Distilled Teacher model) process 1-minute of raw audio in approximately **12.4 seconds**. 
 Conversely, full forensic isolation deploying the SepFormer Diarization framework processes the same logic with a latency centered around **45.2 seconds**, primarily due to the heavy MaskNet attention matrices. 
 
-*(Refer to `advanced_latency_violin.png` for a visualization of the bimodal latency distribution and outlier detection within the isolated execution environments).*
+![System Latency Violin Plot](advanced_latency_violin.png)
+*Figure 4: Bimodal distribution of processing latencies contrasting the ultra-fast real-time classifier operations against the deep tensor unmixing times mandated by the heavy SepFormer framework.*
 
 ### 6. Ablation Matrix & Acoustic Stress Testing
 To empirically justify the complex architecture, an ablation study isolated the quantitative benefit of each modular addition to the hybrid engine. The progressive addition of the HTDemucs separator, SepFormer diarization, and DANN domain-adversarial logic resulted in monotonically increasing accuracies. Notably, the **Hybrid Engine (SepFormer+DANN)** sustained a 91.5% classification accuracy even under extreme **-10dB SNR interference** (background noise 10 times louder than the signal).
 
-*(Refer to `advanced_ablation_matrix.png` for the progressive heatmap of accuracy gains, and `advanced_acoustic_stress.png` for the intersection line-graph of noise-degradation robustness).*
+![Modular Ablation Matrix](advanced_ablation_matrix.png)
+*Figure 5: Heatmap quantifying the discrete accuracy benefits contributed sequentially by each architectural layer. Notice how Diarization primarily accelerates overlapped speaker identification.*
+
+![Acoustic Stress Test](advanced_acoustic_stress.png)
+*Figure 6: Robustness testing graph proving that the hybrid engine avoids catastrophic accuracy failure even when masked by severe -10dB to -20dB Signal-to-Noise Interference.*
 
 ### 7. Dataset Taxonomy & Abstracted Diarization
 The custom framework ingested an 87-subclass taxonomic hierarchy, heavily weighted towards "Human Voice" and "Vehicle Sounds" due to the prevalent nature of these signals in law enforcement evidence. Furthermore, the Diarization module actively modeled speaker interaction collisions over time.
 
-*(Refer to `advanced_taxonomy_treemap.png` for the dataset mapping distribution, and `advanced_diarization_network.png` outlining the structural interaction social graph representing complex speaker interruption matrices).*
+![Taxonomy Treemap](advanced_taxonomy_treemap.png)
+*Figure 7: Hierarchical area map displaying the dense weight and architectural dataset proportion given to heavily scrutinized classes (Human/Vehicular).*
+
+![Diarization Interaction Graph](advanced_diarization_network.png)
+*Figure 8: Abstract nodal graph visualizing real-world overlaps, dynamically clustering speakers based on interruption ratios uncovered by the offline diarization unmixer.*
 
 ---
 
