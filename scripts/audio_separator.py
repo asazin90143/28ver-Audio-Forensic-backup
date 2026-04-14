@@ -68,75 +68,163 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             classification_path = os.path.abspath(classification_path.strip('"'))
         
         # 1. Run Demucs
-        log("Loading model htdemucs...")
+        use_fast = os.environ.get("USE_FAST_SEPARATION", "false").lower() == "true"
         
-        import torch
-        from demucs.pretrained import get_model
-        from demucs.apply import apply_model
-        import torchaudio.transforms as T
-        
-        model = get_model("htdemucs")
-        model.cpu()
-        model.eval()
-        
-        sr, audio_data = wavfile.read(read_path)
-        
-        if audio_data.dtype == np.int16:
-             audio_data = audio_data.astype(np.float32) / 32768.0
-        elif audio_data.dtype == np.int32:
-             audio_data = audio_data.astype(np.float32) / 2147483648.0
-        elif audio_data.dtype == np.uint8:
-             audio_data = (audio_data.astype(np.float32) - 128) / 128.0
-             
-        if len(audio_data.shape) == 1:
-            audio_data = np.expand_dims(audio_data, axis=0)
+        if use_fast:
+            log("FAST MODE ENABLED: Using distilled Student Separator (198K params)...")
+            from speechbrain.inference.separation import SepformerSeparation
+            import torch.nn as nn
+            
+            class StudentSeparator(nn.Module):
+                def __init__(self, input_dim=256, hidden_dim=128, num_sources=3):
+                    super().__init__()
+                    self.encoder = nn.Sequential(
+                        nn.Conv1d(input_dim, hidden_dim, 1), nn.ReLU(), nn.BatchNorm1d(hidden_dim)
+                    )
+                    self.separator = nn.Sequential(
+                        nn.Conv1d(hidden_dim, hidden_dim, 1), nn.ReLU(),
+                        nn.Conv1d(hidden_dim, hidden_dim, 1), nn.ReLU(),
+                        nn.Conv1d(hidden_dim, hidden_dim, 1), nn.ReLU()
+                    )
+                    self.decoder = nn.Sequential(
+                        nn.Conv1d(hidden_dim, hidden_dim, 1), nn.ReLU(),
+                        nn.Conv1d(hidden_dim, input_dim * num_sources, 1)
+                    )
+                    self.num_sources = num_sources
+                    self.input_dim = input_dim
+
+                def forward(self, x):
+                    encoded = self.encoder(x)
+                    separated = self.separator(encoded)
+                    decoded = self.decoder(separated)
+                    b, _, t = decoded.size()
+                    return decoded.view(b, self.num_sources, self.input_dim, t)
+            
+            # Load Teacher's Encoder/Decoder
+            teacher = SepformerSeparation.from_hparams(
+                source="speechbrain/sepformer-wsj03mix",
+                savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj03mix')
+            )
+            
+            # Load custom Student Masknet
+            student = StudentSeparator()
+            student_path = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\student_separator\student_separator.pt"
+            if os.path.exists(student_path):
+                student.load_state_dict(torch.load(student_path, map_location="cpu", weights_only=False))
+                log("✅ Custom Student Separator weights loaded successfully.")
+            else:
+                log("⚠️ Student separator weights not found, using raw initialized params.")
+            
+            student.eval()
+            
+            # Process via student pipeline
+            sr, audio_data = wavfile.read(read_path)
+            if audio_data.dtype != np.float32:
+                 audio_data = audio_data.astype(np.float32) / 32768.0
+            if len(audio_data.shape) > 1:
+                audio_data = audio_data.mean(axis=1) # Mono required for SpeechBrain
+            
+            import torchaudio.transforms as T
+            if sr != 8000:
+                resampler = T.Resample(sr, 8000)
+                wav = resampler(torch.tensor(audio_data).unsqueeze(0))
+            else:
+                wav = torch.tensor(audio_data).unsqueeze(0)
+            
+            log("Running lightweight student inference...")
+            with torch.no_grad():
+                encoded_feat = teacher.mods.encoder(wav)
+                masks = student(encoded_feat)
+                sources = teacher.mods.decoder(masks)
+            
+            if sr != 8000:
+                upsampler = T.Resample(8000, sr)
+                sources_up = upsampler(sources)
+            else:
+                sources_up = sources
+                
+            sources_np = sources_up.squeeze(0).numpy() # Shape [3, Time]
+            stem_names = ["voice_1", "voice_2", "voice_3"]
         else:
-            audio_data = audio_data.T
+            log("Loading model htdemucs...")
             
-        if audio_data.shape[0] == 1:
-            audio_data = np.concatenate([audio_data, audio_data], axis=0)
+            from demucs.pretrained import get_model
+            from demucs.apply import apply_model
+            import torchaudio.transforms as T
             
-        wav = torch.tensor(audio_data)
-        
-        if sr != model.samplerate:
-            log(f"Resampling {sr} -> {model.samplerate}Hz")
-            resampler = T.Resample(sr, model.samplerate)
-            wav = resampler(wav)
+            model = get_model("htdemucs")
+            model.cpu()
+            model.eval()
             
-        ref = wav.mean(0)
-        wav = (wav - ref.mean()) / ref.std()
-        
-        import multiprocessing
-        num_workers = max(1, multiprocessing.cpu_count() - 1)
-        log(f"Separating using {num_workers} workers...")
-        
-        sources = apply_model(model, wav[None], device="cpu", shifts=1, split=True, 
-                             overlap=0.25, progress=True, num_workers=num_workers)[0]
-        
-        sources = sources * ref.std() + ref.mean()
+            sr, audio_data = wavfile.read(read_path)
+            
+            if audio_data.dtype == np.int16:
+                 audio_data = audio_data.astype(np.float32) / 32768.0
+            elif audio_data.dtype == np.int32:
+                 audio_data = audio_data.astype(np.float32) / 2147483648.0
+            elif audio_data.dtype == np.uint8:
+                 audio_data = (audio_data.astype(np.float32) - 128) / 128.0
+                 
+            if len(audio_data.shape) == 1:
+                audio_data = np.expand_dims(audio_data, axis=0)
+            else:
+                audio_data = audio_data.T
+                
+            if audio_data.shape[0] == 1:
+                audio_data = np.concatenate([audio_data, audio_data], axis=0)
+                
+            wav = torch.tensor(audio_data)
+            
+            if sr != model.samplerate:
+                log(f"Resampling {sr} -> {model.samplerate}Hz")
+                resampler = T.Resample(sr, model.samplerate)
+                wav = resampler(wav)
+                
+            ref = wav.mean(0)
+            wav = (wav - ref.mean()) / ref.std()
+            
+            import multiprocessing
+            num_workers = max(1, multiprocessing.cpu_count() - 1)
+            log(f"Separating using {num_workers} workers...")
+            
+            sources = apply_model(model, wav[None], device="cpu", shifts=1, split=True, 
+                                 overlap=0.25, progress=True, num_workers=num_workers)[0]
+            
+            sources = sources * ref.std() + ref.mean()
+            sources_np = sources.numpy()
+            stem_names = model.sources
+
         
         log("Separation finished. Saving stems...")
         
-        stem_names = model.sources
         demucs_folder_name = os.path.splitext(os.path.basename(read_path))[0]
         separated_folder = os.path.join(output_dir, "htdemucs", demucs_folder_name)
         os.makedirs(separated_folder, exist_ok=True)
         
-        sources_np = sources.numpy()
         final_stems = {}
         for i, name in enumerate(stem_names):
             out_path = os.path.join(separated_folder, f"{name}.wav")
-            # Stereo save
-            data_to_save = sources_np[i].T
-            wavfile.write(out_path, model.samplerate, (data_to_save * 32767).astype(np.int16))
+            # Stereo save if HTDemucs, mono if Student
+            if len(sources_np.shape) > 2:
+                 data_to_save = sources_np[i].T
+                 sample_rate_to_save = model.samplerate
+            else:
+                 data_to_save = np.expand_dims(sources_np[i], axis=1) # Fake stereo
+                 data_to_save = np.concatenate([data_to_save, data_to_save], axis=1)
+                 sample_rate_to_save = sr # Used original resampled SR
+            
+            wavfile.write(out_path, sample_rate_to_save, (data_to_save * 32767).astype(np.int16))
             final_stems[name] = f"/separated_audio/htdemucs/{demucs_folder_name}/{name}.wav"
 
         # 2. Harmonic/Percussive Masking (Forensic Polish)
         log("Starting forensic masking...")
         try:
             import librosa
-            merged_background = (sources_np[0] + sources_np[1] + sources_np[2]) / 3.0
-            y_back = merged_background[0]
+            if len(sources_np.shape) > 2 and "htdemucs" in demucs_folder_name:
+                merged_background = (sources_np[0] + sources_np[1] + sources_np[2]) / 3.0
+                y_back = merged_background[0]
+            else:
+                y_back = sources_np[0]  # Just use voice 1 as back for Student path
             
             # Harmonic/Percussive Split for Forensic Clarity
             h, p = librosa.effects.hpss(y_back, margin=(1.0, 5.0))
