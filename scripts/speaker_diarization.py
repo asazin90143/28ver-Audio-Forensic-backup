@@ -255,6 +255,51 @@ def main():
                 else:
                     print_progress(65, "⚠️ Custom weights file not found!")
                 
+                # --- PHASE 5: BEATs FRONT-END ADAPTER (Optional) ---
+                if os.environ.get("USE_BEATS_FRONTEND", "false").lower() == "true":
+                    print_progress(66, "Loading external Microsoft BEATs front-end extractor (2GB)...")
+                    try:
+                        import sys
+                        if "scripts.beats" not in sys.modules:
+                            sys.path.insert(0, os.path.join(process.cwd(), "scripts"))
+                        
+                        from beats.BEATs import BEATs, BEATsConfig
+                        import torchaudio.transforms as T
+                        
+                        beats_ckpt_path = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\beats\BEATs_iter3_plus_AS2M.pt"
+                        beats_ckpt = torch.load(beats_ckpt_path, map_location="cpu", weights_only=False)
+                        beats_model = BEATs(BEATsConfig(beats_ckpt["cfg"]))
+                        beats_model.load_state_dict(beats_ckpt["model"])
+                        beats_model.eval()
+                        for p in beats_model.parameters(): p.requires_grad = False
+                        
+                        adapter = nn.Sequential(
+                            nn.Linear(768, 512), nn.ReLU(), nn.Dropout(0.1),
+                            nn.Linear(512, 256), nn.LayerNorm(256)
+                        )
+                        adapter_path = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\beats_adapter.pt"
+                        adapter.load_state_dict(torch.load(adapter_path, map_location="cpu", weights_only=False))
+                        adapter.eval()
+                        
+                        class BEATsEncoderWrapper(nn.Module):
+                            def __init__(self, b_model, b_adapter):
+                                super().__init__()
+                                self.beats = b_model
+                                self.adapter = b_adapter
+                                self.resampler = T.Resample(8000, 16000)
+                            def forward(self, x):
+                                # x is (Batch, Time) at 8kHz
+                                x_16k = self.resample(x) if hasattr(self, 'resample') else self.resampler(x)
+                                with torch.no_grad():
+                                    feats, _ = self.beats.extract_features(x_16k)
+                                    adapt = self.adapter(feats) # (B, T, 256)
+                                return adapt.transpose(1, 2) # To (B, 256, T) for SpeechBrain masknet
+                        
+                        sep_model.mods.encoder = BEATsEncoderWrapper(beats_model, adapter)
+                        print_progress(66, "✅ Extreme deep-feature acoustic BEATs adapter wired into SepFormer.")
+                    except Exception as beats_err:
+                        print_progress(66, f"⚠️ Failed to load BEATs frontend: {beats_err}. Falling back to default Conv1D encoder.")
+                
             except Exception as sb_err:
                 print_progress(65, f"SpeechBrain load failed: {sb_err}. Falling back to direct slicing.")
                 sep_model = None
