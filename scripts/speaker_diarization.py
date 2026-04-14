@@ -112,16 +112,16 @@ def main():
             token=hf_token
         )
 
-        try:
-            pyannote_ckpt = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\pyannote_finetune\checkpoint_epoch_20.pt"
-            if os.path.exists(pyannote_ckpt):
-                print_progress(15, "Injecting custom PyAnnote fine-tuned segmentation weights...")
-                custom_state = torch.load(pyannote_ckpt, map_location="cpu", weights_only=False)
-                if hasattr(pipeline, '_segmentation') and hasattr(pipeline._segmentation, 'model'):
-                    pipeline._segmentation.model.load_state_dict(custom_state.get("model_state", custom_state))
-                    print(json.dumps({"progress": 15, "message": "✅ Custom PyAnnote model loaded.", "status": "processing"}))
-        except Exception as e:
-            print(json.dumps({"progress": 15, "message": f"⚠️ Custom model load failed: {e}", "status": "processing"}))
+        #try:
+        #    pyannote_ckpt = r"C:\Users\picha\OneDrive\Desktop\CODES\training\models\separation\pyannote_finetune\checkpoint_epoch_20.pt"
+        #    if os.path.exists(pyannote_ckpt):
+        #        print_progress(15, "Injecting custom PyAnnote fine-tuned segmentation weights...")
+        #        custom_state = torch.load(pyannote_ckpt, map_location="cpu", weights_only=False)
+        #        if hasattr(pipeline, '_segmentation') and hasattr(pipeline._segmentation, 'model'):
+        #            pipeline._segmentation.model.load_state_dict(custom_state.get("model_state", custom_state))
+        #            print(json.dumps({"progress": 15, "message": "✅ Custom PyAnnote model loaded.", "status": "processing"}))
+        #except Exception as e:
+        #    print(json.dumps({"progress": 15, "message": f"⚠️ Custom model load failed: {e}", "status": "processing"}))
 
         # Move to GPU if available
         if torch.cuda.is_available():
