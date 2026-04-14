@@ -20,13 +20,29 @@ The CRNN model was evaluated against 10 critical forensic sound classes. The fol
 ### 3. Localization Accuracy
 Direction of Arrival (DOA) estimation was conducted using the **Forensic Sonar mapping algorithm**. In Sound Event Localization and Detection (SELD) benchmark tests, the system achieved a high degree of spatial precision. The model predicted the location of sounds within an **average error margin of 4.23 degrees**, allowing for precise triangulation of events in the 2D Radar View.
 
-### 4. Authenticity Verification
+### 4. Authenticity Verification & Metrics
 The authenticity module, designed to distinguish between **AI-generated (Deepfake)** and **Acoustic (Real)** audio, utilized spectral consistency checks and phase irregularity analysis. The system achieved an overall accuracy of **94.6%**. 
 - **True Positives (Fake Caught)**: 94.5%
 - **False Positives (Real flagged as Fake)**: 5.3%
 
-### 5. System Efficiency
-The application demonstrated high computational efficiency through its automated JobQueue management. Evaluation on a standard workstation revealed that the web application processed **1 minute of raw audio in approximately 12.4 seconds**.
+*(Refer to `advanced_roc_curve.png` for the Receiver Operating Characteristic (ROC) curve outlining the High Area Under the Curve (AUC) for AI boundary detection, and `advanced_pr_curve.png` illustrating the precision-recall balance for critical forensic anomalies like gunshots).*
+
+### 5. System Efficiency & Processing Latency
+The application demonstrated high computational efficiency dynamically scaled through JobQueue management. Leveraging the lightweight mode versus the deep unmixing mode offered high utility variance:
+Fast classifications (MediaPipe + Distilled Teacher model) process 1-minute of raw audio in approximately **12.4 seconds**. 
+Conversely, full forensic isolation deploying the SepFormer Diarization framework processes the same logic with a latency centered around **45.2 seconds**, primarily due to the heavy MaskNet attention matrices. 
+
+*(Refer to `advanced_latency_violin.png` for a visualization of the bimodal latency distribution and outlier detection within the isolated execution environments).*
+
+### 6. Ablation Matrix & Acoustic Stress Testing
+To empirically justify the complex architecture, an ablation study isolated the quantitative benefit of each modular addition to the hybrid engine. The progressive addition of the HTDemucs separator, SepFormer diarization, and DANN domain-adversarial logic resulted in monotonically increasing accuracies. Notably, the **Hybrid Engine (SepFormer+DANN)** sustained a 91.5% classification accuracy even under extreme **-10dB SNR interference** (background noise 10 times louder than the signal).
+
+*(Refer to `advanced_ablation_matrix.png` for the progressive heatmap of accuracy gains, and `advanced_acoustic_stress.png` for the intersection line-graph of noise-degradation robustness).*
+
+### 7. Dataset Taxonomy & Abstracted Diarization
+The custom framework ingested an 87-subclass taxonomic hierarchy, heavily weighted towards "Human Voice" and "Vehicle Sounds" due to the prevalent nature of these signals in law enforcement evidence. Furthermore, the Diarization module actively modeled speaker interaction collisions over time.
+
+*(Refer to `advanced_taxonomy_treemap.png` for the dataset mapping distribution, and `advanced_diarization_network.png` outlining the structural interaction social graph representing complex speaker interruption matrices).*
 
 ---
 

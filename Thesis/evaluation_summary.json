@@ -1,5 +1,5 @@
 {
-    "execution_time_seconds": 168.41,
+    "execution_time_seconds": 206.93,
     "status": "success",
     "artifacts_generated": [
         "training_loss_curve.png",
@@ -8,6 +8,11 @@
         "doa_error_histogram.png",
         "doa_metrics.json",
         "authenticity_confusion_matrix.png",
-        "authenticity_metrics.json"
+        "authenticity_metrics.json",
+        "advanced_roc_curve.png",
+        "advanced_pr_curve.png",
+        "advanced_latency_violin.png",
+        "advanced_taxonomy_treemap.png",
+        "advanced_diarization_network.png"
     ]
 }

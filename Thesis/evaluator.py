@@ -19,10 +19,15 @@ def run_pipeline():
     import spatial_locator
     spatial_locator.main()
     
-    # Run authenticity_detector
-    print("\n[3/3] Running Authenticity Detection...")
+    # Run Authenticity Detector
+    print("\n[3/4] Running Authenticity Detection...")
     import authenticity_detector
     authenticity_detector.main()
+    
+    # Run Advanced Visualizations
+    print("\n[4/4] Generating Advanced Thesis Visualizations...")
+    import advanced_viz
+    advanced_viz.main()
     
     end_time = time.time()
     exec_time = end_time - start_time
@@ -44,7 +49,14 @@ def run_pipeline():
             "doa_error_histogram.png",
             "doa_metrics.json",
             "authenticity_confusion_matrix.png",
-            "authenticity_metrics.json"
+            "authenticity_metrics.json",
+            "advanced_roc_curve.png",
+            "advanced_pr_curve.png",
+            "advanced_latency_violin.png",
+            "advanced_taxonomy_treemap.png",
+            "advanced_diarization_network.png",
+            "advanced_ablation_matrix.png",
+            "advanced_acoustic_stress.png"
         ]
     }
     
