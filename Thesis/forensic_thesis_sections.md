@@ -5,6 +5,9 @@
 ### 1. Training Performance
 The system utilizes a hybrid model architecture combining a **Convolutional Recurrent Neural Network (CRNN)** for feature extraction and a **k-Nearest Neighbors (KNN)** classifier for forensic tagging. During the fine-tuning phase on the custom forensic dataset, the model demonstrated robust convergence. The Training Loss vs. Validation Loss graph shows a steady decline, with validation loss stabilizing at **0.24** after 40 epochs, indicating that the dropout layers successfully prevented overfitting.
 
+![Training Loss Curve](training_loss_curve.png)
+*Figure 0: Epoch-over-epoch convergence tracking demonstrating the avoidance of over-fitting across the deep CRNN module.*
+
 ### 2. Event Detection Metrics
 The CRNN model was evaluated against 10 critical forensic sound classes. The following table summarizes the performance metrics on the synthetic validation set:
 
@@ -33,6 +36,9 @@ The authenticity module, designed to distinguish between **AI-generated (Deepfak
 
 ![Precision Recall Curve](advanced_pr_curve.png)
 *Figure 3: Multi-class Precision-Recall curve illustrating the handling of heavily imbalanced data (e.g., maintaining high precision even for rare events like Gunshots).*
+
+![Authenticity Confusion Matrix](authenticity_confusion_matrix.png)
+*Figure 3b: Confusion matrix highlighting the extremely low false positive rate (5.3%) when authenticating real acoustic sources.*
 
 ### 5. System Efficiency & Processing Latency
 The application demonstrated high computational efficiency dynamically scaled through JobQueue management. Leveraging the lightweight mode versus the deep unmixing mode offered high utility variance:
