@@ -12,6 +12,19 @@ import torchaudio
 if not hasattr(torchaudio, "list_audio_backends"):
     torchaudio.list_audio_backends = lambda: ["soundfile"]
 
+# Patch os.symlink for Windows (SpeechBrain uses symlinks which require admin on Windows)
+_original_symlink = os.symlink
+def _safe_symlink(src, dst, *args, **kwargs):
+    try:
+        _original_symlink(src, dst, *args, **kwargs)
+    except OSError:
+        # Fall back to copy if symlinks aren't allowed
+        if os.path.isdir(src):
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        else:
+            shutil.copy2(src, dst)
+os.symlink = _safe_symlink
+
 # Patch huggingface_hub: newer versions removed 'use_auth_token' param
 import huggingface_hub
 _original_snapshot_download = huggingface_hub.snapshot_download
