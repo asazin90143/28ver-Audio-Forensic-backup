@@ -36,7 +36,12 @@ huggingface_hub.snapshot_download = _patched_snapshot_download
 _original_hf_hub_download = huggingface_hub.hf_hub_download
 def _patched_hf_hub_download(*args, **kwargs):
     if 'use_auth_token' in kwargs: kwargs['token'] = kwargs.pop('use_auth_token')
-    return _original_hf_hub_download(*args, **kwargs)
+    try:
+        return _original_hf_hub_download(*args, **kwargs)
+    except huggingface_hub.utils.EntryNotFoundError as e:
+        import requests
+        # SpeechBrain 1.0.3 expects a requests HTTPError on missing custom.py
+        raise requests.exceptions.HTTPError("404 Client Error: Entry Not Found") from e
 huggingface_hub.hf_hub_download = _patched_hf_hub_download
 
 
@@ -131,7 +136,8 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             # Load Teacher's Encoder/Decoder
             teacher = SepformerSeparation.from_hparams(
                 source="speechbrain/sepformer-wsj03mix",
-                savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj03mix')
+                savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj03mix'),
+                use_auth_token=True
             )
             
             # Load custom Student Masknet
