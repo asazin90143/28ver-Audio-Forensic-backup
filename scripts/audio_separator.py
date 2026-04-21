@@ -173,6 +173,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
                 
             sources_np = sources_up.squeeze(0).numpy() # Shape [3, Time]
             stem_names = ["voice_1", "voice_2", "voice_3"]
+            sample_rate_out = sr  # Track output sample rate for unified saving
         else:
             log("Loading model htdemucs...")
             
@@ -221,6 +222,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             sources = sources * ref.std() + ref.mean()
             sources_np = sources.numpy()
             stem_names = model.sources
+            sample_rate_out = model.samplerate  # Track output sample rate for unified saving
 
         
         log("Separation finished. Saving stems...")
@@ -235,11 +237,11 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             # Stereo save if HTDemucs, mono if Student
             if len(sources_np.shape) > 2:
                  data_to_save = sources_np[i].T
-                 sample_rate_to_save = model.samplerate
+                 sample_rate_to_save = sample_rate_out
             else:
                  data_to_save = np.expand_dims(sources_np[i], axis=1) # Fake stereo
                  data_to_save = np.concatenate([data_to_save, data_to_save], axis=1)
-                 sample_rate_to_save = sr # Used original resampled SR
+                 sample_rate_to_save = sample_rate_out
             
             wavfile.write(out_path, sample_rate_to_save, (data_to_save * 32767).astype(np.int16))
             final_stems[name] = f"/separated_audio/htdemucs/{demucs_folder_name}/{name}.wav"
@@ -258,7 +260,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             h, p = librosa.effects.hpss(y_back, margin=(1.0, 5.0))
             
             back_path = os.path.join(separated_folder, "background_mixed.wav")
-            wavfile.write(back_path, model.samplerate, (p * 32767).astype(np.int16))
+            wavfile.write(back_path, sample_rate_out, (p * 32767).astype(np.int16))
             final_stems["background"] = f"/separated_audio/htdemucs/{demucs_folder_name}/background_mixed.wav"
             log("Background masking complete.")
         except Exception as e:

@@ -80,7 +80,6 @@ def map_to_forensic_category(mediapipe_category):
         "Pop": "Gunshot / Explosion",
         "Slam": "Gunshot / Explosion",
         "Thump": "Gunshot / Explosion",
-        "Thunder": "Gunshot / Explosion", # Sometimes confused with explosion
         
         # Impact / Footsteps
         "Hammer": "Impact / Breach",
