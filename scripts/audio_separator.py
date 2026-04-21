@@ -137,7 +137,7 @@ def separate_audio(input_path, output_dir, job_id, classification_path=None):
             teacher = SepformerSeparation.from_hparams(
                 source="speechbrain/sepformer-wsj03mix",
                 savedir=os.path.join(tempfile.gettempdir(), 'speechbrain_models', 'sepformer-wsj03mix'),
-                use_auth_token=True
+                use_auth_token=os.environ.get("HUGGINGFACE_TOKEN", os.environ.get("HF_TOKEN"))
             )
             
             # Load custom Student Masknet
