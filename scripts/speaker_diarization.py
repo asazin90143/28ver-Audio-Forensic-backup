@@ -259,9 +259,8 @@ def main():
                 if os.environ.get("USE_BEATS_FRONTEND", "false").lower() == "true":
                     print_progress(66, "Loading external Microsoft BEATs front-end extractor (2GB)...")
                     try:
-                        import sys
                         if "scripts.beats" not in sys.modules:
-                            sys.path.insert(0, os.path.join(process.cwd(), "scripts"))
+                            sys.path.insert(0, os.path.join(os.getcwd(), "scripts"))
                         
                         from beats.BEATs import BEATs, BEATsConfig
                         import torchaudio.transforms as T
