@@ -244,7 +244,7 @@ export default function AudioForensicDetector() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500/30">
+    <div suppressHydrationWarning className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-purple-500/30">
       {/* HEADER SECTION */}
       <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
