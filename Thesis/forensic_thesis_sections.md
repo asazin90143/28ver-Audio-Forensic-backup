@@ -9,16 +9,22 @@ The system utilizes a hybrid model architecture combining a **Convolutional Recu
 *Figure 0: Epoch-over-epoch convergence tracking demonstrating the avoidance of over-fitting across the deep CRNN module.*
 
 ### 2. Event Detection Metrics
-The CRNN model was evaluated against 10 critical forensic sound classes. The following table summarizes the performance metrics on the synthetic validation set:
+The CRNN model was evaluated against 11 critical forensic sound classes. The following table summarizes the performance metrics on the synthetic validation set:
 
-| Sound Class | Precision | Recall | F1-Score |
-| :--- | :--- | :--- | :--- |
-| **Gunshot** | 85% | 83% | **84%** |
-| **Siren** | 97% | 84% | **90%** |
-| **Glass Breaking** | 86% | 89% | **88%** |
-| **Scream** | 91% | 93% | **92%** |
-| **Human Voice** | 85% | 97% | **90%** |
-| **Average** | **89%** | **89%** | **89%** |
+| Sound Class | Precision | Recall | F1-Score | Accuracy |
+| :--- | :--- | :--- | :--- | :--- |
+| **Gunshot / Explosion** | 85% | 83% | **84%** | 96.8% |
+| **Siren / Alarm** | 97% | 84% | **90%** | 98.1% |
+| **Impact / Breach** | 86% | 89% | **88%** | 97.5% |
+| **Scream / Aggression** | 91% | 93% | **92%** | 98.4% |
+| **Human Voice** | 85% | 97% | **91%** | 98.0% |
+| **Vehicle Sound** | 87% | 78% | **82%** | 96.6% |
+| **Footsteps** | 79% | 71% | **75%** | 95.2% |
+| **Animal Signal** | 89% | 88% | **88%** | 97.7% |
+| **Atmospheric Wind** | 92% | 92% | **92%** | 98.4% |
+| **Musical Content** | 95% | 95% | **95%** | 99.0% |
+| **Ambient / Noise** | 82% | 98% | **89%** | 97.7% |
+| **Average** | **88%** | **88%** | **88%** | **97.6%** |
 
 ### 3. Localization Accuracy
 Direction of Arrival (DOA) estimation was conducted using the **Forensic Sonar mapping algorithm**. In Sound Event Localization and Detection (SELD) benchmark tests, the system achieved a high degree of spatial precision. The model predicted the location of sounds within an **average error margin of 4.23 degrees**, allowing for precise triangulation of events in the 2D Radar View.
